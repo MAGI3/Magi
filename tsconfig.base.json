@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@magi/ipc-schema": ["packages/shared/ipc-schema/src/index.ts"],
+      "@magi/ipc-schema/*": ["packages/shared/ipc-schema/src/*"],
+      "@magi/shared-state": ["packages/shared/shared-state/src/index.ts"],
+      "@magi/shared-state/*": ["packages/shared/shared-state/src/*"]
+    },
+    "types": ["node"]
+  },
+  "include": []
+}

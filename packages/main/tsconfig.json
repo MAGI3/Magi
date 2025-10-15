@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node", "electron"]
+  },
+  "include": ["src"],
+  "references": [
+    {
+      "path": "../shared/ipc-schema"
+    },
+    {
+      "path": "../shared/shared-state"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@magi/ipc-schema": ["../shared/ipc-schema/src"],
+      "@magi/shared-state": ["../shared/shared-state/src"]
+    }
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../shared/ipc-schema" },
+    { "path": "../shared/shared-state" }
+  ]
+}

@@ -1,0 +1,27 @@
+appId: com.magi.browser
+productName: Magi Browser Orchestrator
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - package.json
+  - pnpm-lock.yaml
+  - node_modules/
+  - dist/
+extraMetadata:
+  main: packages/main/dist/main.js
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+asar: true
+asarUnpack:
+  - resources/**
+publish: null
