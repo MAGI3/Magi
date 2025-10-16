@@ -42,7 +42,7 @@ const createServiceInstances = async (window: BrowserWindow) => {
 };
 
 const createWindow = async () => {
-  const preloadPath = path.join(__dirname, 'preload.js');
+  const preloadPath = path.join(__dirname, '../preload/preload.js');
   mainWindow = new MainWindow({
     isDev,
     preloadPath

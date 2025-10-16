@@ -2,13 +2,15 @@
   "name": "magi-browser-orchestrator",
   "version": "0.1.0",
   "private": true,
+  "main": "dist/main/main.js",
   "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --parallel --recursive run dev",
-    "build": "pnpm --recursive run build && pnpm exec electron-builder",
+    "dev": "electron-vite dev --config electron.vite.config.ts",
+    "build": "electron-vite build --config electron.vite.config.ts && electron-builder",
+    "preview": "electron-vite preview --config electron.vite.config.ts",
     "lint": "pnpm --recursive run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "typecheck": "pnpm --recursive run typecheck",
@@ -16,12 +18,12 @@
     "clean": "rimraf node_modules pnpm-lock.yaml dist out build"
   },
   "devDependencies": {
+    "@types/node": "^22.7.4",
     "@typescript-eslint/eslint-plugin": "^8.9.0",
     "@typescript-eslint/parser": "^8.9.0",
-    "@types/node": "^22.7.4",
     "@vitejs/plugin-react": "^4.3.3",
     "electron-builder": "^25.1.6",
-    "electron-vite": "^2.3.0",
+    "electron-vite": "^4.0.1",
     "eslint": "^9.11.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.37.2",
@@ -29,5 +31,9 @@
     "prettier": "^3.3.3",
     "rimraf": "^6.0.1",
     "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "bufferutil": "^4.0.9",
+    "utf-8-validate": "^6.0.5"
   }
 }

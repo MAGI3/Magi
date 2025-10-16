@@ -8,7 +8,7 @@
     "dist"
   ],
   "scripts": {
-    "dev": "electron-vite preview --mode development --watch --config ../../electron.vite.config.ts",
+    "dev": "electron-vite preview --mode development --config ../../electron.vite.config.ts",
     "build": "electron-vite build --config ../../electron.vite.config.ts",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
