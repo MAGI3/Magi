@@ -3,7 +3,7 @@ import type {
   BrowserFleetState,
   PageUpdatedEvent,
   DownloadProgressEvent,
-  BrowserEndpointChangedEvent,
+  EndpointChangedEvent,
 } from '@magi/ipc-schema'
 
 /**
@@ -14,8 +14,8 @@ export class IpcClient {
   /**
    * 调用浏览器操作
    */
-  async invoke(action: BrowserAction): Promise<void> {
-    await window.magiApi.invokeBrowserAction(action)
+  async invoke(action: BrowserAction): Promise<any> {
+    return await window.magiApi.invokeBrowserAction(action)
   }
 
   /**
@@ -30,32 +30,43 @@ export class IpcClient {
    * 订阅页面更新事件
    */
   onPageUpdated(callback: (event: PageUpdatedEvent) => void): () => void {
-    // on 返回清理函数，直接返回给调用方
-    return window.magiApi.on('page:updated', callback)
+    // on 返回清理函数,直接返回给调用方
+    return window.magiApi.on('page:updated', (...args: unknown[]) => {
+      callback(args[0] as PageUpdatedEvent)
+    })
   }
 
   /**
    * 订阅下载进度事件
    */
   onDownloadProgress(callback: (event: DownloadProgressEvent) => void): () => void {
-    return window.magiApi.on('download:progress', callback)
+    return window.magiApi.on('download:progress', (...args: unknown[]) => {
+      callback(args[0] as DownloadProgressEvent)
+    })
   }
 
   /**
    * 订阅浏览器端点变更事件
    */
-  onBrowserEndpointChanged(callback: (event: BrowserEndpointChangedEvent) => void): () => void {
-    return window.magiApi.on('browser:endpointChanged', callback)
+  onBrowserEndpointChanged(callback: (event: EndpointChangedEvent) => void): () => void {
+    return window.magiApi.on('browser:endpointChanged', (...args: unknown[]) => {
+      callback(args[0] as EndpointChangedEvent)
+    })
   }
 
   /**
    * 创建新浏览器
    */
-  async createBrowser(options?: { userAgent?: string }): Promise<void> {
-    await this.invoke({
+  async createBrowser(options?: { name?: string; userAgent?: string }): Promise<{ browserId: string; pageId: string }> {
+    const result = await this.invoke({
       type: 'browser:create',
-      payload: options || {},
+      payload: {
+        name: options?.name || `Browser ${Date.now()}`,
+        headless: false,
+        ...(options?.userAgent && { userAgent: options.userAgent }),
+      },
     })
+    return { browserId: result.browserId, pageId: result.pageId }
   }
 
   /**
@@ -109,7 +120,10 @@ export class IpcClient {
     await this.invoke({
       type: 'page:create',
       browserId,
-      payload: options
+      payload: {
+        activate: options?.activate ?? true,
+        ...(options?.url && { url: options.url }),
+      }
     })
   }
 
@@ -122,7 +136,7 @@ export class IpcClient {
       type: 'page:reload',
       browserId,
       pageId,
-      bypassCache
+      bypassCache: bypassCache ?? false
     })
   }
 

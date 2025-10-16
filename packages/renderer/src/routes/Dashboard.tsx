@@ -23,7 +23,8 @@ export function Dashboard() {
   const { goToBrowserDetail } = useNavigation();
 
   const handleCreateBrowser = async () => {
-    await createBrowser();
+    const { browserId, pageId } = await createBrowser();
+    goToBrowserDetail(browserId, pageId);
   };
 
   const handleDestroyBrowser = async (browserId: string) => {
@@ -130,7 +131,7 @@ export function Dashboard() {
                       <Text size="xs" c="dimmed">
                         ID: {browser.browserId.slice(0, 8)}
                       </Text>
-                      {browser.browserWSEndpoint && (
+                      {browser.endpoints?.browserWSEndpoint && (
                         <Tooltip label="CDP 端点已就绪">
                           <Badge size="xs" color="green" variant="dot">
                             CDP

@@ -23,7 +23,11 @@ export const registerIpcHandlers = (ipcMain: IpcMain, fleetManager: BrowserFleet
 
     switch (action.type) {
       case 'browser:create': {
-        fleetManager.createBrowser(action.payload);
+        const browser = fleetManager.createBrowser(action.payload);
+        const activePage = browser.getActivePage();
+        if (activePage) {
+          return { ok: true, browserId: browser.browserId, pageId: activePage.pageId };
+        }
         break;
       }
       case 'browser:destroy': {
@@ -100,6 +104,29 @@ export const registerIpcHandlers = (ipcMain: IpcMain, fleetManager: BrowserFleet
       }
       case 'download:cancel': {
         logger.warn('Download cancel not yet implemented', action);
+        break;
+      }
+      case 'layout:update': {
+        // Update content bounds and reattach view to ensure proper display
+        fleetManager.updateContentBounds(action.bounds);
+        fleetManager.attachActiveView(action.browserId);
+        break;
+      }
+      case 'devtools:toggle': {
+        const browser = fleetManager.getBrowser(action.browserId);
+        const page = browser?.pagesList.find((p) => p.pageId === action.pageId);
+        if (page) {
+          const webContents = page.view.webContents;
+          if (webContents.isDevToolsOpened()) {
+            webContents.closeDevTools();
+          } else {
+            webContents.openDevTools();
+          }
+        }
+        break;
+      }
+      case 'browserview:detach': {
+        fleetManager.detachView();
         break;
       }
       default: {

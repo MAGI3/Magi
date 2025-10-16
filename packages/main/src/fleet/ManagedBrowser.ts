@@ -174,6 +174,10 @@ export class ManagedBrowser {
     return this.pages.get(this.activePageId);
   }
 
+  getPage(pageId: string): ManagedPage | undefined {
+    return this.pages.get(pageId);
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

@@ -118,7 +118,7 @@ export const theme: MantineThemeOverride = {
           '&:hover': {
             backgroundColor: 'var(--mantine-color-dark-6)',
           },
-          '&[data-active]': {
+          '&[dataActive]': {
             color: 'var(--mantine-color-blue-5)',
             borderColor: 'var(--mantine-color-blue-5)',
           },
@@ -130,7 +130,7 @@ export const theme: MantineThemeOverride = {
       styles: {
         root: {
           borderRadius: 'var(--mantine-radius-md)',
-          '&[data-active]': {
+          '&[dataActive]': {
             backgroundColor: 'var(--mantine-color-dark-6)',
             color: 'var(--mantine-color-blue-5)',
           },

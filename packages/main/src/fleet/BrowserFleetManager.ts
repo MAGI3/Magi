@@ -4,6 +4,7 @@ import { BrowserFleetStateStore } from '@magi/shared-state';
 import type { BrowserFleetState } from '@magi/ipc-schema';
 import { logger } from '../utils/logger.js';
 import { ManagedBrowser } from './ManagedBrowser.js';
+import { ManagedPage } from './ManagedPage.js';
 
 export interface CreateBrowserOptions {
   name?: string;
@@ -107,11 +108,12 @@ export class BrowserFleetManager {
       partition: options.partition ?? null,
       userAgent: options.userAgent,
       headless: options.headless,
-      wsEndpointTemplate: this.browserEndpointTemplate,
+      browserEndpointTemplate: this.browserEndpointTemplate,
       pageEndpointTemplate: this.pageEndpointTemplate.replace(
         '{browserId}',
         '{browserId}'
-      )
+      ),
+      onStateChange: () => this.emitState()
     });
 
     this.browsers.set(browser.browserId, browser);
@@ -208,6 +210,14 @@ export class BrowserFleetManager {
     return this.browsers.get(browserId);
   }
 
+  getPage(pageId: string): ManagedPage | undefined {
+    for (const browser of this.browsers.values()) {
+      const page = browser.getPage(pageId);
+      if (page) return page;
+    }
+    return undefined;
+  }
+
   attachActiveView(browserId: string) {
     const browser = this.browsers.get(browserId);
     if (!browser) return;
@@ -234,7 +244,7 @@ export class BrowserFleetManager {
     this.applyBounds();
   }
 
-  private detachView() {
+  detachView() {
     if (this.attachedView && this.window.getBrowserViews().includes(this.attachedView)) {
       this.window.removeBrowserView(this.attachedView);
     }

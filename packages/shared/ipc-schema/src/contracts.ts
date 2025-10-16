@@ -85,6 +85,13 @@ export const CreatePageOptionsSchema = z.object({
   activate: z.boolean().optional().default(true)
 });
 
+export const RectangleSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number()
+});
+
 export const BrowserActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('browser:create'),
@@ -132,6 +139,21 @@ export const BrowserActionSchema = z.discriminatedUnion('type', [
     browserId: BrowserIdSchema,
     pageId: PageIdSchema,
     downloadId: z.string()
+  }),
+  z.object({
+    type: z.literal('layout:update'),
+    browserId: BrowserIdSchema,
+    pageId: PageIdSchema,
+    bounds: RectangleSchema
+  }),
+  z.object({
+    type: z.literal('devtools:toggle'),
+    browserId: BrowserIdSchema,
+    pageId: PageIdSchema
+  }),
+  z.object({
+    type: z.literal('browserview:detach'),
+    browserId: BrowserIdSchema
   })
 ]);
 

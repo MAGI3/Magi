@@ -1,6 +1,8 @@
 {
   "name": "magi-browser-orchestrator",
   "version": "0.1.0",
+  "description": "Electron-based automation control center managing multiple Chromium surfaces with CDP-compatible endpoints for Playwright and Puppeteer",
+  "author": "Magi Team",
   "private": true,
   "main": "dist/main/main.js",
   "packageManager": "pnpm@9.0.0",
@@ -22,6 +24,7 @@
     "@typescript-eslint/eslint-plugin": "^8.9.0",
     "@typescript-eslint/parser": "^8.9.0",
     "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^31.2.1",
     "electron-builder": "^25.1.6",
     "electron-vite": "^4.0.1",
     "eslint": "^9.11.1",

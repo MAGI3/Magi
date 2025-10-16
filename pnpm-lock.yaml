@@ -27,6 +27,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^4.3.3
         version: 4.7.0(vite@6.4.0(@types/node@22.18.10)(jiti@1.21.7))
+      electron:
+        specifier: ^31.2.1
+        version: 31.7.7
       electron-builder:
         specifier: ^25.1.6
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8(dmg-builder@25.1.8))

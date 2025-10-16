@@ -13,7 +13,9 @@ export function useBrowserActions() {
    */
   const createBrowser = async () => {
     try {
-      await ipcClient.createBrowser({})
+      const browserCount = browsers.length
+      const name = `Browser-${browserCount + 1}`
+      return await ipcClient.createBrowser({ name })
     } catch (error) {
       console.error('Failed to create browser:', error)
       throw error
