@@ -1,9 +1,11 @@
-import { NavLink, Stack, Text } from '@mantine/core'
+import { ActionIcon, Stack, useMantineColorScheme } from '@mantine/core'
 import {
   IconBrowser,
   IconRobot,
   IconSettings,
   IconAutomation,
+  IconMoon,
+  IconSun,
 } from '@tabler/icons-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -46,61 +48,66 @@ const navItems = [
 /**
  * Sidebar 组件
  * 
- * 侧边栏导航，包含 Browser、Automation、AI Assistant、Settings 模块入口
+ * 窄边栏导航（64px），仅显示图标，包含：
+ * - Logo 标识
+ * - 导航图标（Browser、Automation、AI Assistant、Settings）
+ * - 主题切换按钮（底部）
+ * 
  * 设计特点：
- * - 与根背景共享统一色调（dark-7: #1A1B1E）
- * - 使用 Mantine NavLink 组件
+ * - 与根背景共享统一色调（无硬分割线）
+ * - 使用 ActionIcon + Tooltip 实现图标导航
  * - 支持路由高亮
- * - 占位模块禁用状态
+ * - 占位模块显示禁用状态
+ * - 主题切换按钮（暗色/浅色）
  */
 export function Sidebar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { toggleColorScheme } = useMantineColorScheme()
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Logo / Brand */}
-      <div className="p-6 border-b border-dark-4">
-        <Text size="xl" fw={700} c="blue.5">
-          Magi
-        </Text>
-        <Text size="xs" c="dimmed" mt={4}>
-          Browser Orchestrator
-        </Text>
+    <div className="h-full flex flex-col items-center py-4">
+      {/* Logo / Brand - 简化为单字母 */}
+      <div className="w-10 h-10 rounded-full flex items-center justify-center mt-8 mb-12 shadow-lg bg-elevated">
+        <span className="font-bold text-lg text-primary">M</span>
       </div>
 
-      {/* Navigation */}
-      <Stack gap="xs" p="md" className="flex-1 overflow-y-auto">
+      {/* Navigation Icons */}
+      <Stack gap="md" className="flex-1">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = location.pathname === item.path
 
           return (
-            <NavLink
+            <ActionIcon
               key={item.id}
-              label={item.label}
-              description={item.disabled ? '即将推出' : item.description}
-              leftSection={<Icon size={20} stroke={1.5} />}
-              active={isActive}
+              size="xl"
+              variant={isActive ? 'filled' : 'subtle'}
               disabled={item.disabled}
               onClick={() => !item.disabled && navigate(item.path)}
               styles={{
                 root: {
                   cursor: item.disabled ? 'not-allowed' : 'pointer',
-                  opacity: item.disabled ? 0.5 : 1,
+                  opacity: item.disabled ? 0.4 : 1,
                 },
               }}
-            />
+            >
+              <Icon size={22} stroke={1.5} />
+            </ActionIcon>
           )
         })}
       </Stack>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-dark-4">
-        <Text size="xs" c="dimmed" ta="center">
-          v0.1.0-alpha
-        </Text>
-      </div>
+      {/* Theme Toggle Button */}
+      <ActionIcon
+        size="xl"
+        variant="subtle"
+        onClick={() => toggleColorScheme()}
+        className="[&_svg]:transition-transform [&_svg]:duration-300"
+      >
+        <IconMoon size={22} stroke={1.5} className="dark:hidden" />
+        <IconSun size={22} stroke={1.5} className="hidden dark:block" />
+      </ActionIcon>
     </div>
   )
 }

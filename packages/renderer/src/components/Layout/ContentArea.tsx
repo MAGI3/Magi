@@ -24,8 +24,10 @@ export function ContentArea({ children }: ContentAreaProps) {
       style={{
         flex: 1,
         height: '100%',
-        padding: 24,
-        backgroundColor: 'var(--mantine-color-dark-7)',
+        paddingTop: 36,
+        paddingRight: 14,
+        paddingBottom: 14,
+        paddingLeft: 8,
         overflowY: 'auto',
       }}
     >

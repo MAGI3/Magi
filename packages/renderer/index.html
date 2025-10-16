@@ -5,9 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:"
     />
     <title>Magi Browser Orchestrator</title>
+    <script>
+      // Mantine ColorSchemeScript - prevents FOUC (Flash of Unstyled Content)
+      try {
+        const colorScheme = window.localStorage.getItem('mantine-color-scheme-value');
+        if (colorScheme === 'light' || colorScheme === 'dark' || colorScheme === 'auto') {
+          document.documentElement.setAttribute('data-mantine-color-scheme', colorScheme);
+        } else {
+          document.documentElement.setAttribute('data-mantine-color-scheme', 'dark');
+        }
+      } catch (e) {
+        document.documentElement.setAttribute('data-mantine-color-scheme', 'dark');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

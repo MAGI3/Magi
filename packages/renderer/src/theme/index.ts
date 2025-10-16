@@ -41,6 +41,19 @@ export const theme: MantineThemeOverride = {
       '#141517',
       '#101113',
     ],
+    // 浅色背景色板
+    gray: [
+      '#F8F9FA', // bg-primary (浅色模式根背景)
+      '#F1F3F5', // bg-secondary
+      '#E9ECEF',
+      '#DEE2E6',
+      '#CED4DA',
+      '#ADB5BD',
+      '#868E96',
+      '#495057',
+      '#343A40',
+      '#212529',
+    ],
   },
 
   /** 字体配置 */
@@ -65,13 +78,13 @@ export const theme: MantineThemeOverride = {
     xl: '1rem',     // 16px
   },
 
-  /** 阴影配置 */
+  /** 阴影配置 - 增强卡片层级感 */
   shadows: {
     xs: '0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.1)',
-    sm: '0 1px 3px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.1)',
-    md: '0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06)',
-    lg: '0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05)',
-    xl: '0 20px 25px rgba(0, 0, 0, 0.1), 0 10px 10px rgba(0, 0, 0, 0.04)',
+    sm: '0 2px 4px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08)',
+    md: '0 4px 8px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1)',
+    lg: '0 8px 16px rgba(0, 0, 0, 0.18), 0 4px 8px rgba(0, 0, 0, 0.12)',
+    xl: '0 16px 32px rgba(0, 0, 0, 0.2), 0 8px 16px rgba(0, 0, 0, 0.15)',
   },
 
   /** 组件默认属性 */
@@ -79,14 +92,15 @@ export const theme: MantineThemeOverride = {
     AppShell: {
       styles: {
         root: {
-          backgroundColor: 'var(--mantine-color-dark-7)', // bg-primary
+          backgroundColor: 'var(--bg-primary)',
         },
         main: {
-          backgroundColor: 'var(--mantine-color-dark-7)',
+          backgroundColor: 'var(--bg-primary)',
         },
         navbar: {
-          backgroundColor: 'var(--mantine-color-dark-7)', // 侧边栏与根背景一致
-          borderRight: '1px solid var(--mantine-color-dark-6)',
+          backgroundColor: 'var(--bg-primary)',
+          border: 'none',
+          borderRight: 'none',
         },
       },
     },
@@ -94,13 +108,16 @@ export const theme: MantineThemeOverride = {
     Card: {
       defaultProps: {
         radius: 'md',
-        shadow: 'sm',
-        withBorder: true,
+        shadow: 'md',
+        withBorder: false,
       },
       styles: {
         root: {
-          backgroundColor: 'var(--mantine-color-dark-5)', // bg-elevated
-          borderColor: 'var(--mantine-color-dark-4)',
+          backgroundColor: 'var(--bg-elevated)',
+          transition: 'box-shadow 0.2s ease',
+          '&:hover': {
+            boxShadow: 'var(--mantine-shadow-lg)',
+          },
         },
       },
     },
@@ -111,12 +128,12 @@ export const theme: MantineThemeOverride = {
           backgroundColor: 'transparent',
         },
         list: {
-          borderBottom: '1px solid var(--mantine-color-dark-4)',
+          borderBottom: '1px solid var(--border-primary)',
         },
         tab: {
-          color: 'var(--mantine-color-dark-1)',
+          color: 'var(--text-secondary)',
           '&:hover': {
-            backgroundColor: 'var(--mantine-color-dark-6)',
+            backgroundColor: 'var(--bg-hover)',
           },
           '&[dataActive]': {
             color: 'var(--mantine-color-blue-5)',
@@ -131,11 +148,11 @@ export const theme: MantineThemeOverride = {
         root: {
           borderRadius: 'var(--mantine-radius-md)',
           '&[dataActive]': {
-            backgroundColor: 'var(--mantine-color-dark-6)',
+            backgroundColor: 'var(--bg-hover)',
             color: 'var(--mantine-color-blue-5)',
           },
           '&:hover': {
-            backgroundColor: 'var(--mantine-color-dark-6)',
+            backgroundColor: 'var(--bg-hover)',
           },
         },
       },
@@ -158,9 +175,9 @@ export const theme: MantineThemeOverride = {
       },
       styles: {
         input: {
-          backgroundColor: 'var(--mantine-color-dark-6)',
-          borderColor: 'var(--mantine-color-dark-4)',
-          color: 'var(--mantine-color-dark-0)',
+          backgroundColor: 'var(--bg-hover)',
+          borderColor: 'var(--border-primary)',
+          color: 'var(--text-primary)',
           '&:focus': {
             borderColor: 'var(--mantine-color-blue-5)',
           },
@@ -177,14 +194,14 @@ export const theme: MantineThemeOverride = {
     Modal: {
       styles: {
         content: {
-          backgroundColor: 'var(--mantine-color-dark-5)',
+          backgroundColor: 'var(--bg-elevated)',
         },
         header: {
-          backgroundColor: 'var(--mantine-color-dark-5)',
-          borderBottom: '1px solid var(--mantine-color-dark-4)',
+          backgroundColor: 'var(--bg-elevated)',
+          borderBottom: '1px solid var(--border-primary)',
         },
         body: {
-          backgroundColor: 'var(--mantine-color-dark-5)',
+          backgroundColor: 'var(--bg-elevated)',
         },
       },
     },
@@ -196,8 +213,8 @@ export const theme: MantineThemeOverride = {
       },
       styles: {
         tooltip: {
-          backgroundColor: 'var(--mantine-color-dark-4)',
-          color: 'var(--mantine-color-dark-0)',
+          backgroundColor: 'var(--bg-elevated)',
+          color: 'var(--text-primary)',
         },
       },
     },
@@ -205,16 +222,16 @@ export const theme: MantineThemeOverride = {
     Menu: {
       styles: {
         dropdown: {
-          backgroundColor: 'var(--mantine-color-dark-5)',
-          borderColor: 'var(--mantine-color-dark-4)',
+          backgroundColor: 'var(--bg-elevated)',
+          borderColor: 'var(--border-primary)',
         },
         item: {
-          color: 'var(--mantine-color-dark-0)',
+          color: 'var(--text-primary)',
           '&:hover': {
-            backgroundColor: 'var(--mantine-color-dark-6)',
+            backgroundColor: 'var(--bg-hover)',
           },
           '&[data-hovered]': {
-            backgroundColor: 'var(--mantine-color-dark-6)',
+            backgroundColor: 'var(--bg-hover)',
           },
         },
       },
@@ -224,10 +241,10 @@ export const theme: MantineThemeOverride = {
       styles: {
         scrollbar: {
           '&[data-orientation="vertical"] .mantine-ScrollArea-thumb': {
-            backgroundColor: 'var(--mantine-color-dark-4)',
+            backgroundColor: 'var(--border-primary)',
           },
           '&[data-orientation="horizontal"] .mantine-ScrollArea-thumb': {
-            backgroundColor: 'var(--mantine-color-dark-4)',
+            backgroundColor: 'var(--border-primary)',
           },
         },
       },
@@ -237,7 +254,7 @@ export const theme: MantineThemeOverride = {
   /** 其他配置 */
   other: {
     // 自定义配置可以放在这里
-    sidebarWidth: 280,
+    sidebarWidth: 64, // 窄边栏,仅显示图标
     headerHeight: 60,
     tabHeight: 40,
   },

@@ -5,9 +5,9 @@ import { theme } from './theme'
 import { AppLayout } from './components/Layout/AppLayout'
 import { Dashboard } from './routes/Dashboard'
 import { BrowserDetail } from './routes/BrowserDetail'
-import { Settings } from './routes/Settings'
 import { Automation } from './routes/Automation'
 import { AIAssistant } from './routes/AIAssistant'
+import { Settings } from './routes/Settings'
 
 function App() {
   return (

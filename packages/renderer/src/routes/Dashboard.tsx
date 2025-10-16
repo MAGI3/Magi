@@ -42,11 +42,11 @@ export function Dashboard() {
   return (
     <Stack gap="md">
       <Group justify="space-between" align="center">
-        <Title order={1}>浏览器编排中心</Title>
+        <Title order={3}>浏览器编排中心</Title>
         <Button
           leftSection={<IconPlus size={16} />}
           onClick={handleCreateBrowser}
-          variant="filled"
+          variant="light"
         >
           创建新浏览器
         </Button>
@@ -58,7 +58,7 @@ export function Dashboard() {
           padding="xl"
           radius="md"
           style={{
-            backgroundColor: 'var(--mantine-color-dark-5)',
+            backgroundColor: 'var(--bg-active)',
           }}
         >
           <Stack align="center" gap="md" py="xl">
@@ -83,7 +83,7 @@ export function Dashboard() {
                   padding={0}
                   radius="md"
                   style={{
-                    backgroundColor: 'var(--mantine-color-dark-5)',
+                    backgroundColor: 'var(--bg-active)',
                     aspectRatio: '16 / 9',
                     position: 'relative',
                     overflow: 'hidden',
@@ -107,7 +107,7 @@ export function Dashboard() {
                         left: 0,
                         width: '100%',
                         height: '100%',
-                        backgroundColor: 'var(--mantine-color-dark-6)',
+                        backgroundColor: 'var(--bg-elevated)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -153,7 +153,7 @@ export function Dashboard() {
                           </Text>
                           {browser.endpoints?.browserWSEndpoint && (
                             <Tooltip label="CDP 端点已就绪">
-                              <Badge size="xs" color="green" variant="dot">
+                              <Badge size="xs" variant="dot">
                                 CDP
                               </Badge>
                             </Tooltip>
@@ -162,7 +162,6 @@ export function Dashboard() {
                         <Tooltip label="关闭浏览器">
                           <ActionIcon
                             variant="light"
-                            color="red"
                             size="sm"
                             onClick={(e) => {
                               e.stopPropagation();

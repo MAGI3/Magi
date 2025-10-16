@@ -10,7 +10,7 @@ export function Automation() {
         padding="lg"
         radius="md"
         style={{
-          backgroundColor: 'var(--mantine-color-dark-5)',
+          backgroundColor: 'var(--bg-active)',
         }}
       >
         <Text size="lg" fw={500} mb="md">

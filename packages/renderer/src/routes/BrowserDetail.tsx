@@ -9,7 +9,6 @@ import {
   Group,
   Button,
   Text,
-  Title,
   Badge,
   Progress,
   CloseButton,
@@ -180,100 +179,115 @@ export function BrowserDetail() {
   }
 
   return (
-    <Stack gap="md" className="h-full">
-      {/* Header with Browser Info */}
-      <Card>
-        <Group justify="space-between">
-          <div>
-            <Title order={3}>Browser: {browser.browserId}</Title>
-            <Text size="sm" c="dimmed">
-              {pages.length} page{pages.length !== 1 ? 's' : ''} open
-            </Text>
-          </div>
-          <Group gap="xs">
-            <Tooltip label={showDevTools ? 'Hide DevTools' : 'Show DevTools'}>
+    <Card
+      shadow="sm"
+      padding={0}
+      radius="md"
+      style={{
+        backgroundColor: 'var(--bg-elevated)',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <Stack gap={0} className="h-full">
+        {/* Chrome-style Toolbar */}
+        <div className="px-4 py-2.5 border-b border-primary bg-secondary">
+        <Group gap="xs" wrap="nowrap">
+          {/* Navigation Controls */}
+          <ActionIcon.Group>
+            <Tooltip label="后退">
               <ActionIcon
-                variant={showDevTools ? 'filled' : 'light'}
-                onClick={handleToggleDevTools}
-                size="lg"
+                variant="subtle"
+                onClick={() => pageId && goBack(pageId)}
+                disabled={!activePage?.navigationState?.canGoBack}
+                size="md"
               >
-                <IconTerminal size={18} />
+                <IconArrowLeft size={18} stroke={1.5} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="前进">
+              <ActionIcon
+                variant="subtle"
+                onClick={() => pageId && goForward(pageId)}
+                disabled={!activePage?.navigationState?.canGoForward}
+                size="md"
+              >
+                <IconArrowRight size={18} stroke={1.5} />
+              </ActionIcon>
+            </Tooltip>
+            <Tooltip label="刷新">
+              <ActionIcon
+                variant="subtle"
+                onClick={() => pageId && reloadPage(pageId)}
+                loading={activePage?.navigationState?.isLoading}
+                size="md"
+              >
+                <IconReload size={18} stroke={1.5} />
+              </ActionIcon>
+            </Tooltip>
+          </ActionIcon.Group>
+
+          {/* Address Bar */}
+          <TextInput
+            placeholder="输入网址或搜索..."
+            value={addressBarValue}
+            onChange={(e) => setAddressBarValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="flex-1"
+            size="sm"
+            styles={{
+              input: {
+                borderRadius: '20px',
+              },
+            }}
+            classNames={{
+              input: 'bg-primary',
+            }}
+            leftSection={
+              activePage?.favicon ? (
+                <img
+                  src={activePage.favicon}
+                  alt="favicon"
+                  className="w-4 h-4"
+                />
+              ) : null
+            }
+            rightSection={
+              activePage?.navigationState?.isLoading ? (
+                <Badge size="xs" variant="light">
+                  加载中
+                </Badge>
+              ) : null
+            }
+          />
+
+          {/* Toolbar Actions */}
+          <Group gap="xs">
+            <Tooltip label={showDevTools ? '隐藏开发者工具' : '显示开发者工具'}>
+              <ActionIcon
+                variant={showDevTools ? 'light' : 'subtle'}
+                onClick={handleToggleDevTools}
+                size="md"
+              >
+                <IconTerminal size={18} stroke={1.5} />
               </ActionIcon>
             </Tooltip>
           </Group>
         </Group>
-      </Card>
+      </div>
 
-      {/* Navigation Controls & Address Bar */}
-      <Card>
-        <Stack gap="md">
-          <Group gap="xs">
-            <ActionIcon.Group>
-              <Tooltip label="Go Back">
-                <ActionIcon
-                  variant="light"
-                  onClick={() => pageId && goBack(pageId)}
-                  disabled={!activePage?.navigationState?.canGoBack}
-                >
-                  <IconArrowLeft size={18} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Go Forward">
-                <ActionIcon
-                  variant="light"
-                  onClick={() => pageId && goForward(pageId)}
-                  disabled={!activePage?.navigationState?.canGoForward}
-                >
-                  <IconArrowRight size={18} />
-                </ActionIcon>
-              </Tooltip>
-              <Tooltip label="Reload">
-                <ActionIcon
-                  variant="light"
-                  onClick={() => pageId && reloadPage(pageId)}
-                  loading={activePage?.navigationState?.isLoading}
-                >
-                  <IconReload size={18} />
-                </ActionIcon>
-              </Tooltip>
-            </ActionIcon.Group>
-
-            <TextInput
-              placeholder="Enter URL or search..."
-              value={addressBarValue}
-              onChange={(e) => setAddressBarValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="flex-1"
-              leftSection={
-                activePage?.favicon ? (
-                  <img
-                    src={activePage.favicon}
-                    alt="favicon"
-                    className="w-4 h-4"
-                  />
-                ) : null
-              }
-              rightSection={
-                activePage?.navigationState?.isLoading ? (
-                  <Badge size="xs" color="blue">
-                    Loading...
-                  </Badge>
-                ) : null
-              }
-            />
-          </Group>
-        </Stack>
-      </Card>
-
-      {/* Tabs & Browser Content */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
+      {/* Browser Tabs */}
+      <div className="px-2 pt-1 border-b border-primary bg-secondary">
         <Tabs
           value={activePage?.pageId}
           onChange={handleSelectTab}
+          variant="pills"
           classNames={{
-            root: 'flex flex-col h-full',
-            list: 'flex-shrink-0',
-            panel: 'flex-1 overflow-hidden',
+            root: 'browser-tabs',
+            list: 'gap-1',
+            tab: 'rounded-t-lg rounded-b-none data-[active=true]:bg-hover',
           }}
         >
           <Tabs.List>
@@ -303,89 +317,109 @@ export function BrowserDetail() {
                   ) : null
                 }
               >
-                <Text size="sm" className="max-w-[150px] truncate">
-                  {page.title || 'New Page'}
+                <Text size="sm" className="max-w-[120px] truncate">
+                  {page.title || '新标签页'}
                 </Text>
               </Tabs.Tab>
             ))}
-            <Tabs.Tab
-              value="__new__"
-              onClick={(e) => {
-                e.preventDefault();
-                handleCreatePage();
-              }}
-            >
-              <IconPlus size={16} />
-            </Tabs.Tab>
-          </Tabs.List>
-
-          {pages.map((page) => (
-            <Tabs.Panel key={page.pageId} value={page.pageId} className="h-full">
-              <div
-                ref={page.pageId === pageId ? browserHostRef : null}
-                className="browser-host w-full h-full bg-white rounded"
-                style={{ minHeight: '400px' }}
+            <Tooltip label="新建标签页">
+              <Tabs.Tab
+                value="__new__"
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleCreatePage();
+                }}
               >
-                {/* BrowserView will be attached here by main process */}
-              </div>
-            </Tabs.Panel>
-          ))}
+                <IconPlus size={16} />
+              </Tabs.Tab>
+            </Tooltip>
+          </Tabs.List>
         </Tabs>
-      </Card>
+      </div>
 
-      {/* Downloads Panel (conditional) */}
+      {/* BrowserView Content Area */}
+      <div className="flex-1 overflow-hidden bg-primary">
+        {pages.map((page) => (
+          <div
+            key={page.pageId}
+            ref={page.pageId === pageId ? browserHostRef : null}
+            className="browser-host w-full h-full"
+            style={{
+              display: page.pageId === pageId ? 'block' : 'none',
+              minHeight: '400px',
+            }}
+          >
+            {/* BrowserView will be attached here by main process */}
+          </div>
+        ))}
+      </div>
+
+      {/* Downloads Panel - Fixed at bottom when active */}
       {activePage?.downloadState && activePage.downloadState.items.length > 0 && (
-        <Card>
-          <Stack gap="sm">
-            <Group justify="space-between">
-              <Group gap="xs">
-                <IconDownload size={18} />
-                <Text fw={500}>Downloads</Text>
-              </Group>
+        <div className="border-t border-primary bg-secondary p-3">
+          <Stack gap="xs">
+            <Group gap="xs" className="px-2">
+              <IconDownload size={16} stroke={1.5} />
+              <Text size="sm" fw={500}>
+                下载 ({activePage.downloadState.items.length})
+              </Text>
             </Group>
-            {activePage.downloadState.items.map((download) => (
-              <Card key={download.id} withBorder>
-                <Group justify="space-between">
-                  <div className="flex-1">
-                    <Text size="sm" fw={500} className="truncate">
-                      {download.fileName}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {download.state === 'progressing' && download.receivedBytes && download.totalBytes
-                        ? `${Math.round((download.receivedBytes / download.totalBytes) * 100)}%`
-                        : download.state}
-                    </Text>
-                    {download.state === 'progressing' && download.receivedBytes && download.totalBytes && (
-                      <Progress
-                        value={(download.receivedBytes / download.totalBytes) * 100}
-                        size="sm"
-                        className="mt-1"
-                      />
-                    )}
+            <div className="max-h-32 overflow-y-auto">
+              <Stack gap="xs">
+                {activePage.downloadState.items.map((download) => (
+                  <div
+                    key={download.id}
+                    className="px-3 py-2 rounded-lg bg-elevated"
+                  >
+                    <Group justify="space-between" wrap="nowrap">
+                      <div className="flex-1 min-w-0">
+                        <Text size="sm" fw={500} className="truncate">
+                          {download.fileName}
+                        </Text>
+                        <Group gap="xs" mt={4}>
+                          <Text size="xs" c="dimmed">
+                            {download.state === 'progressing' && download.receivedBytes && download.totalBytes
+                              ? `${Math.round((download.receivedBytes / download.totalBytes) * 100)}%`
+                              : download.state === 'completed'
+                              ? '已完成'
+                              : download.state === 'cancelled'
+                              ? '已取消'
+                              : download.state}
+                          </Text>
+                          {download.state === 'progressing' && download.receivedBytes && download.totalBytes && (
+                            <Progress
+                              value={(download.receivedBytes / download.totalBytes) * 100}
+                              size="xs"
+                              className="flex-1"
+                            />
+                          )}
+                        </Group>
+                      </div>
+                      {download.state === 'progressing' && (
+                        <Button
+                          size="xs"
+                          variant="light"
+                          onClick={() => {
+                            window.magiApi.invokeBrowserAction({
+                              type: 'download:cancel',
+                              browserId: browserId || '',
+                              pageId: activePage.pageId,
+                              downloadId: download.id,
+                            });
+                          }}
+                        >
+                          取消
+                        </Button>
+                      )}
+                    </Group>
                   </div>
-                  {download.state === 'progressing' && (
-                    <Button
-                      size="xs"
-                      variant="light"
-                      color="red"
-                      onClick={() => {
-                        window.magiApi.invokeBrowserAction({
-                          type: 'download:cancel',
-                          browserId: browserId || '',
-                          pageId: activePage.pageId,
-                          downloadId: download.id,
-                        });
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </Group>
-              </Card>
-            ))}
+                ))}
+              </Stack>
+            </div>
           </Stack>
-        </Card>
+        </div>
       )}
-    </Stack>
+      </Stack>
+    </Card>
   );
 }
