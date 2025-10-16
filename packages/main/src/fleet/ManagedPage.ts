@@ -30,6 +30,7 @@ export class ManagedPage {
   wsEndpoint: string;
 
   private readonly notifyState: () => void;
+  private readonly listeners = new Map<string, (...args: any[]) => void>();
 
   constructor(private readonly options: ManagedPageOptions) {
     this.browserId = options.browserId;
@@ -68,52 +69,67 @@ export class ManagedPage {
   private registerListeners() {
     const { webContents } = this.view;
 
-    webContents.on('page-title-updated', (_event: ElectronEvent, title: string) => {
+    const onPageTitleUpdated = (_event: ElectronEvent, title: string) => {
       this.updatePage((page) => {
         page.title = title;
       });
-    });
+    };
+    webContents.on('page-title-updated', onPageTitleUpdated);
+    this.listeners.set('page-title-updated', onPageTitleUpdated);
 
-    webContents.on('page-favicon-updated', (_event: ElectronEvent, favicons: string[]) => {
+    const onPageFaviconUpdated = (_event: ElectronEvent, favicons: string[]) => {
       this.updatePage((page) => {
         page.favicon = favicons[0] ?? null;
       });
-    });
+    };
+    webContents.on('page-favicon-updated', onPageFaviconUpdated);
+    this.listeners.set('page-favicon-updated', onPageFaviconUpdated);
 
-    webContents.on(
-      'did-start-navigation',
-      (_event: ElectronEvent, url: string, isInPlace: boolean) => {
-        logger.debug('Page navigation started', { url, pageId: this.pageId, isInPlace });
-        this.updatePage((page) => {
-          page.url = url;
-          page.navigationState = {
-            ...page.navigationState,
-            isLoading: true
-          };
-        });
-      }
-    );
+    const onDidStartNavigation = (
+      _event: ElectronEvent,
+      url: string,
+      isInPlace: boolean
+    ) => {
+      logger.debug('Page navigation started', { url, pageId: this.pageId, isInPlace });
+      this.updatePage((page) => {
+        page.url = url;
+        page.navigationState = {
+          ...page.navigationState,
+          isLoading: true
+        };
+      });
+    };
+    webContents.on('did-start-navigation', onDidStartNavigation);
+    this.listeners.set('did-start-navigation', onDidStartNavigation);
 
-    webContents.on('did-navigate', (_event: ElectronEvent, url: string) => {
+    const onDidNavigate = (_event: ElectronEvent, url: string) => {
       this.updateNavigationState(url);
-    });
+    };
+    webContents.on('did-navigate', onDidNavigate);
+    this.listeners.set('did-navigate', onDidNavigate);
 
-    webContents.on('did-stop-loading', () => {
+    const onDidStopLoading = () => {
       this.updateNavigationState();
-    });
+    };
+    webContents.on('did-stop-loading', onDidStopLoading);
+    this.listeners.set('did-stop-loading', onDidStopLoading);
 
-    webContents.on('did-start-loading', () => {
+    const onDidStartLoading = () => {
       this.updatePage((page) => {
         page.navigationState = {
           ...page.navigationState,
           isLoading: true
         };
       });
-    });
+    };
+    webContents.on('did-start-loading', onDidStartLoading);
+    this.listeners.set('did-start-loading', onDidStartLoading);
 
-    webContents.on('destroyed', () => {
+    const onDestroyed = () => {
       logger.info('WebContents destroyed for page', this.pageId);
-    });
+    };
+    webContents.on('destroyed', onDestroyed);
+    this.listeners.set('destroyed', onDestroyed);
   }
 
   private updatePage(mutator: (page: ManagedPageModel) => void) {
@@ -173,8 +189,14 @@ export class ManagedPage {
   }
 
   destroy() {
-    if (!this.view.isDestroyed()) {
-      this.view.webContents.destroy();
+    const { webContents } = this.view;
+    
+    // Remove all event listeners before destroying
+    if (!webContents.isDestroyed()) {
+      this.listeners.forEach((listener, eventName) => {
+        webContents.removeListener(eventName as any, listener);
+      });
+      this.listeners.clear();
     }
   }
 }

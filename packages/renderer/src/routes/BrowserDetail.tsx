@@ -279,14 +279,14 @@ export function BrowserDetail() {
       </div>
 
       {/* Browser Tabs */}
-      <div className="px-2 pt-1 border-b border-primary bg-secondary">
+      <div className="px-2 pt-1 bg-secondary">
         <Tabs
           value={activePage?.pageId}
           onChange={handleSelectTab}
           variant="pills"
           classNames={{
             root: 'browser-tabs',
-            list: 'gap-1',
+            list: 'gap-1 items-center',
             tab: 'rounded-t-lg rounded-b-none data-[active=true]:bg-hover',
           }}
         >
@@ -323,15 +323,14 @@ export function BrowserDetail() {
               </Tabs.Tab>
             ))}
             <Tooltip label="新建标签页">
-              <Tabs.Tab
-                value="__new__"
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleCreatePage();
-                }}
+              <ActionIcon
+                variant="subtle"
+                onClick={handleCreatePage}
+                size="md"
+                className="ml-1 self-center"
               >
                 <IconPlus size={16} />
-              </Tabs.Tab>
+              </ActionIcon>
             </Tooltip>
           </Tabs.List>
         </Tabs>

@@ -119,56 +119,87 @@ export function Dashboard() {
                     </div>
                   )}
 
-                  {/* 半透明信息栏 */}
+                  {/* 信息栏 - 使用渐变背景提升一致性 */}
                   <div
                     style={{
                       position: 'absolute',
                       bottom: 0,
                       left: 0,
                       right: 0,
-                      background: 'rgba(0, 0, 0, 0.75)',
-                      backdropFilter: 'blur(8px)',
-                      padding: '8px 12px',
+                      background: 'linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.85) 60%, rgba(0, 0, 0, 0.6) 100%)',
+                      backdropFilter: 'blur(12px)',
+                      WebkitBackdropFilter: 'blur(12px)',
+                      padding: '12px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
                     }}
                   >
-                    <Stack gap={4}>
+                    <Stack gap={6}>
                       <Group justify="space-between" align="flex-start" gap="xs">
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <Text fw={500} size="sm" truncate style={{ color: 'white' }}>
+                          <Text fw={600} size="sm" truncate style={{ color: 'rgba(255, 255, 255, 0.95)' }}>
                             {activePage?.title || '新标签页'}
                           </Text>
-                          <Text size="xs" c="dimmed" truncate>
+                          <Text size="xs" truncate style={{ color: 'rgba(255, 255, 255, 0.6)' }}>
                             {activePage?.url || 'about:blank'}
                           </Text>
                         </div>
-                        <Badge size="sm" variant="light">
+                        <Badge 
+                          size="sm" 
+                          variant="light"
+                          style={{
+                            backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                            color: 'rgba(255, 255, 255, 0.9)',
+                          }}
+                        >
                           {pageCount} 页
                         </Badge>
                       </Group>
 
                       <Group justify="space-between" align="center" gap="xs">
-                        <Group gap={6}>
-                          <Text size="xs" c="dimmed">
+                        <Group gap={8}>
+                          <Text size="xs" style={{ color: 'rgba(255, 255, 255, 0.5)' }}>
                             ID: {browser.browserId.slice(0, 8)}
                           </Text>
                           {browser.endpoints?.browserWSEndpoint && (
                             <Tooltip label="CDP 端点已就绪">
-                              <Badge size="xs" variant="dot">
-                                CDP
-                              </Badge>
+                              <Group gap={4} style={{ 
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                                border: '1px solid rgba(34, 197, 94, 0.3)',
+                              }}>
+                                <div style={{
+                                  width: '6px',
+                                  height: '6px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#22c55e',
+                                  boxShadow: '0 0 8px rgba(34, 197, 94, 0.6)',
+                                  animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                                }} />
+                                <Text size="xs" fw={500} style={{ color: '#22c55e' }}>
+                                  CDP
+                                </Text>
+                              </Group>
                             </Tooltip>
                           )}
                         </Group>
                         <Tooltip label="关闭浏览器">
                           <ActionIcon
+                            color="red"
                             variant="light"
                             size="sm"
+                            style={{
+                              backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                              '&:hover': {
+                                backgroundColor: 'rgba(239, 68, 68, 0.25)',
+                              }
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleDestroyBrowser(browser.browserId);
                             }}
                           >
-                            <IconTrash size={14} />
+                            <IconTrash size={14} style={{ color: '#ef4444' }} />
                           </ActionIcon>
                         </Tooltip>
                       </Group>
