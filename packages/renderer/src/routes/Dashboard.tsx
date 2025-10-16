@@ -80,89 +80,101 @@ export function Dashboard() {
               <Grid.Col key={browser.browserId} span={{ base: 12, sm: 6, lg: 4 }}>
                 <Card
                   shadow="sm"
-                  padding="lg"
+                  padding={0}
                   radius="md"
                   style={{
                     backgroundColor: 'var(--mantine-color-dark-5)',
-                    height: '100%',
+                    aspectRatio: '16 / 9',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    cursor: activePage ? 'pointer' : 'default',
                   }}
+                  onClick={() => activePage && handleOpenBrowser(browser.browserId, activePage.pageId)}
                 >
-                  <Card.Section>
-                    {activePage?.thumbnail ? (
-                      <Image
-                        src={activePage.thumbnail}
-                        height={200}
-                        alt="Browser thumbnail"
-                        fit="cover"
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          height: 200,
-                          backgroundColor: 'var(--mantine-color-dark-6)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <Text c="dimmed" size="sm">
-                          无缩略图
-                        </Text>
-                      </div>
-                    )}
-                  </Card.Section>
-
-                  <Stack gap="xs" mt="md">
-                    <Group justify="space-between" align="flex-start">
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <Text fw={500} size="sm" truncate>
-                          {activePage?.title || '新标签页'}
-                        </Text>
-                        <Text size="xs" c="dimmed" truncate>
-                          {activePage?.url || 'about:blank'}
-                        </Text>
-                      </div>
-                      <Badge size="sm" variant="light">
-                        {pageCount} 页
-                      </Badge>
-                    </Group>
-
-                    <Group gap="xs" mt="xs">
-                      <Text size="xs" c="dimmed">
-                        ID: {browser.browserId.slice(0, 8)}
+                  {/* 背景截图 */}
+                  {activePage?.thumbnail?.dataUrl ? (
+                    <Image
+                      src={activePage.thumbnail.dataUrl}
+                      alt="Browser thumbnail"
+                      fit="cover"
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: '100%',
+                        backgroundColor: 'var(--mantine-color-dark-6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text c="dimmed" size="sm">
+                        无缩略图
                       </Text>
-                      {browser.endpoints?.browserWSEndpoint && (
-                        <Tooltip label="CDP 端点已就绪">
-                          <Badge size="xs" color="green" variant="dot">
-                            CDP
-                          </Badge>
-                        </Tooltip>
-                      )}
-                    </Group>
+                    </div>
+                  )}
 
-                    <Group gap="xs" mt="md">
-                      <Button
-                        variant="light"
-                        size="xs"
-                        flex={1}
-                        leftSection={<IconExternalLink size={14} />}
-                        onClick={() => handleOpenBrowser(browser.browserId, activePage?.pageId)}
-                        disabled={!activePage}
-                      >
-                        打开详情
-                      </Button>
-                      <Tooltip label="关闭浏览器">
-                        <ActionIcon
-                          variant="light"
-                          color="red"
-                          size="lg"
-                          onClick={() => handleDestroyBrowser(browser.browserId)}
-                        >
-                          <IconTrash size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                    </Group>
-                  </Stack>
+                  {/* 半透明信息栏 */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      background: 'rgba(0, 0, 0, 0.75)',
+                      backdropFilter: 'blur(8px)',
+                      padding: '8px 12px',
+                    }}
+                  >
+                    <Stack gap={4}>
+                      <Group justify="space-between" align="flex-start" gap="xs">
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Text fw={500} size="sm" truncate style={{ color: 'white' }}>
+                            {activePage?.title || '新标签页'}
+                          </Text>
+                          <Text size="xs" c="dimmed" truncate>
+                            {activePage?.url || 'about:blank'}
+                          </Text>
+                        </div>
+                        <Badge size="sm" variant="light">
+                          {pageCount} 页
+                        </Badge>
+                      </Group>
+
+                      <Group justify="space-between" align="center" gap="xs">
+                        <Group gap={6}>
+                          <Text size="xs" c="dimmed">
+                            ID: {browser.browserId.slice(0, 8)}
+                          </Text>
+                          {browser.endpoints?.browserWSEndpoint && (
+                            <Tooltip label="CDP 端点已就绪">
+                              <Badge size="xs" color="green" variant="dot">
+                                CDP
+                              </Badge>
+                            </Tooltip>
+                          )}
+                        </Group>
+                        <Tooltip label="关闭浏览器">
+                          <ActionIcon
+                            variant="light"
+                            color="red"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDestroyBrowser(browser.browserId);
+                            }}
+                          >
+                            <IconTrash size={14} />
+                          </ActionIcon>
+                        </Tooltip>
+                      </Group>
+                    </Stack>
+                  </div>
                 </Card>
               </Grid.Col>
             );
