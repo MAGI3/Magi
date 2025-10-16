@@ -185,7 +185,7 @@ export function BrowserDetail() {
       radius="md"
       style={{
         backgroundColor: 'var(--bg-elevated)',
-        height: '100%',
+        height: 'calc(100dvh - 50px)',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',

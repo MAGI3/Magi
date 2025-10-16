@@ -16,6 +16,7 @@ interface ContentAreaProps {
  * - 内边距 24px，确保内容不贴边
  * - 高度 100%，填满可用空间
  * - 支持滚动溢出内容
+ * - 顶部区域支持拖拽窗口
  */
 export function ContentArea({ children }: ContentAreaProps) {
   return (
@@ -24,14 +25,38 @@ export function ContentArea({ children }: ContentAreaProps) {
       style={{
         flex: 1,
         height: '100%',
-        paddingTop: 36,
         paddingRight: 14,
         paddingBottom: 14,
         paddingLeft: 8,
         overflowY: 'auto',
+        position: 'relative',
       }}
     >
-      {children}
+      {/* 可拖拽的顶部区域 */}
+      <Box
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 36,
+          // @ts-ignore - Webkit 特定属性
+          WebkitAppRegion: 'drag',
+          cursor: 'move',
+          zIndex: 1,
+        }}
+      />
+      
+      {/* 内容区域 */}
+      <Box
+        style={{
+          paddingTop: 36,
+          position: 'relative',
+          zIndex: 2,
+        }}
+      >
+        {children}
+      </Box>
     </Box>
   );
 }
