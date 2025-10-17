@@ -1,4 +1,4 @@
-import { BrowserView, BrowserWindow, type Rectangle } from 'electron';
+import { WebContentsView, BrowserWindow, type Rectangle } from 'electron';
 import { EventEmitter } from 'node:events';
 import { BrowserFleetStateStore } from '@magi/shared-state';
 import type { BrowserFleetState } from '@magi/ipc-schema';
@@ -47,7 +47,7 @@ export class BrowserFleetManager {
   private readonly store = new BrowserFleetStateStore();
   private readonly emitter = new EventEmitter();
   private contentBounds: Rectangle;
-  private attachedView: BrowserView | null = null;
+  private attachedView: WebContentsView | null = null;
   private browserEndpointTemplate =
     'ws://localhost:9222/devtools/browser/{browserId}';
   private pageEndpointTemplate =
@@ -135,8 +135,8 @@ export class BrowserFleetManager {
 
     if (this.attachedView) {
       const currentView = this.attachedView;
-      if (this.window.getBrowserViews().includes(currentView)) {
-        this.window.removeBrowserView(currentView);
+      if (this.window.contentView.children.includes(currentView)) {
+        this.window.contentView.removeChildView(currentView);
       }
       this.attachedView = null;
     }
@@ -246,29 +246,24 @@ export class BrowserFleetManager {
       return;
     }
 
-    if (this.attachedView && this.window.getBrowserViews().includes(this.attachedView)) {
-      this.window.removeBrowserView(this.attachedView);
+    if (this.attachedView && this.window.contentView.children.includes(this.attachedView)) {
+      this.window.contentView.removeChildView(this.attachedView);
     }
 
     this.attachedView = page.view;
-    this.window.addBrowserView(page.view);
+    this.window.contentView.addChildView(page.view);
     this.applyBounds();
   }
 
   detachView() {
-    if (this.attachedView && this.window.getBrowserViews().includes(this.attachedView)) {
-      this.window.removeBrowserView(this.attachedView);
+    if (this.attachedView && this.window.contentView.children.includes(this.attachedView)) {
+      this.window.contentView.removeChildView(this.attachedView);
     }
     this.attachedView = null;
   }
 
   private applyBounds() {
     if (!this.attachedView) return;
-
-    this.attachedView.setAutoResize({
-      width: true,
-      height: true
-    });
 
     const bounds: Rectangle = {
       x: this.contentBounds.x,

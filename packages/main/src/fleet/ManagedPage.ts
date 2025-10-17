@@ -1,4 +1,4 @@
-import { BrowserView, type Rectangle, type Session } from 'electron';
+import { WebContentsView, type Rectangle, type Session } from 'electron';
 import type { Event as ElectronEvent } from 'electron';
 import { randomUUID } from 'node:crypto';
 import {
@@ -24,7 +24,7 @@ export interface ManagedPageOptions {
 export class ManagedPage {
   readonly pageId: string;
   readonly browserId: string;
-  readonly view: BrowserView;
+  readonly view: WebContentsView;
   readonly session: Session;
   readonly store: BrowserFleetStateStore;
   wsEndpoint: string;
@@ -40,7 +40,7 @@ export class ManagedPage {
     this.store = options.store;
     this.notifyState = options.onStateChange ?? (() => {});
 
-    this.view = new BrowserView({
+    this.view = new WebContentsView({
       webPreferences: {
         session: this.session,
         sandbox: false,
@@ -48,6 +48,9 @@ export class ManagedPage {
         nodeIntegration: false
       }
     });
+
+    // WebContentsView 默认背景色是白色，设置为透明以保持与 BrowserView 相同的行为
+    this.view.setBackgroundColor('#00000000');
 
     this.view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     this.registerListeners();

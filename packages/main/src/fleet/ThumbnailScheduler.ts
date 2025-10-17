@@ -133,7 +133,7 @@ export class ThumbnailScheduler {
   private async captureThumbnail(
     browserId: string,
     pageId: string,
-    view: Electron.BrowserView
+    view: Electron.WebContentsView
   ) {
     try {
       const webContents = view.webContents;
