@@ -93,11 +93,8 @@ export class ManagedBrowser {
 
     this.pages.set(pageId, page);
 
-    if (options.url) {
-      page
-        .navigate(options.url)
-        .catch((error) => logger.error('Failed to navigate new page', { error, pageId }));
-    }
+    // Note: Navigation should be deferred until BrowserView is attached to window
+    // This is now handled by BrowserFleetManager after attachActiveView()
 
     if (options.isActive ?? false) {
       this.setActivePage(pageId);

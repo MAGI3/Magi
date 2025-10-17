@@ -160,6 +160,17 @@ export class BrowserFleetManager {
 
     if (options.activate ?? true) {
       this.attachActiveView(options.browserId);
+      
+      // Navigate after BrowserView is attached to window
+      if (options.url && page) {
+        page.navigate(options.url).catch((error) => {
+          logger.error('Failed to navigate new page', {
+            browserId: options.browserId,
+            pageId: page.pageId,
+            error
+          });
+        });
+      }
     }
 
     this.emitState();

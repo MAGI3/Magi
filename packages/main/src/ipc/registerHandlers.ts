@@ -35,11 +35,14 @@ export const registerIpcHandlers = (ipcMain: IpcMain, fleetManager: BrowserFleet
         break;
       }
       case 'page:create': {
-        fleetManager.createPage({
+        const page = fleetManager.createPage({
           browserId: action.browserId,
           url: action.payload?.url ?? null,
           activate: action.payload?.activate ?? true
         });
+        if (page) {
+          return { ok: true, pageId: page.pageId };
+        }
         break;
       }
       case 'page:navigate': {

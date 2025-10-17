@@ -116,8 +116,8 @@ export class IpcClient {
   async createPage(
     browserId: string,
     options?: { url?: string; activate?: boolean }
-  ): Promise<void> {
-    await this.invoke({
+  ): Promise<{ pageId: string }> {
+    const result = await this.invoke({
       type: 'page:create',
       browserId,
       payload: {
@@ -125,6 +125,7 @@ export class IpcClient {
         ...(options?.url && { url: options.url }),
       }
     })
+    return { pageId: result.pageId }
   }
 
   async reloadPage(

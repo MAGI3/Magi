@@ -201,3 +201,10 @@ export type PageUpdatedEvent = z.infer<typeof PageUpdatedEventSchema>;
 export type DownloadProgressEvent = z.infer<typeof DownloadProgressEventSchema>;
 export type EndpointChangedEvent = z.infer<typeof EndpointChangedEventSchema>;
 export type IpcOutboundEvent = z.infer<typeof IpcOutboundEventSchema>;
+
+// IPC Response schemas for actions that return data
+export const CreatePageResponseSchema = z.object({
+  pageId: PageIdSchema
+});
+
+export type CreatePageResponse = z.infer<typeof CreatePageResponseSchema>;

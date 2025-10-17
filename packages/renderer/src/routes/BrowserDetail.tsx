@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Card,
   Stack,
@@ -27,6 +27,7 @@ import { usePageActions } from '../hooks';
 
 export function BrowserDetail() {
   const { browserId, pageId } = useParams<{ browserId: string; pageId: string }>();
+  const navigate = useNavigate();
   const {
     browser,
     pages,
@@ -112,7 +113,9 @@ export function BrowserDetail() {
 
   // Handle address bar navigation
   const handleNavigate = () => {
-    if (addressBarValue && browserId && pageId) {
+    // 使用 activePage 而不是 URL 参数中的 pageId，确保导航到当前选中的 tab
+    const targetPageId = activePage?.pageId;
+    if (addressBarValue && browserId && targetPageId) {
       let url = addressBarValue.trim();
       
       // Add protocol if missing
@@ -126,7 +129,7 @@ export function BrowserDetail() {
         }
       }
 
-      navigateToUrl(pageId, url);
+      navigateToUrl(targetPageId, url);
     }
   };
 
@@ -138,7 +141,10 @@ export function BrowserDetail() {
 
   const handleCreatePage = async () => {
     if (browserId) {
-      await createPage();
+      const newPageId = await createPage();
+      if (newPageId) {
+        navigate(`/browser/${browserId}/${newPageId}`);
+      }
     }
   };
 
@@ -151,6 +157,8 @@ export function BrowserDetail() {
   const handleSelectTab = (value: string | null) => {
     if (value && browserId) {
       selectPage(value);
+      // 同步更新 URL 路由，确保 pageId 参数与选中的 tab 一致
+      navigate(`/browser/${browserId}/${value}`);
     }
   };
 
