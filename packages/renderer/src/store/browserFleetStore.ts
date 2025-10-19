@@ -35,7 +35,9 @@ export const useBrowserFleetStore = create<BrowserFleetStore>((set, get) => {
 
   // 在应用卸载时清理订阅（虽然在 Electron 应用中很少发生）
   if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', unsubscribe)
+    window.addEventListener('beforeunload', () => {
+      unsubscribe()
+    })
   }
 
   return {
@@ -91,7 +93,23 @@ export const useBrowserFleetStore = create<BrowserFleetStore>((set, get) => {
 
 // 便捷选择器 hooks
 export const useBrowsers = () => useBrowserFleetStore((state) => state.browsers)
-export const useStatistics = () => useBrowserFleetStore((state) => state.statistics)
+
+// 计算全局统计信息（从所有 browsers 聚合）
+export const useStatistics = () =>
+  useBrowserFleetStore((state) => {
+    const totalBrowsers = state.browsers.length
+    const totalPages = state.browsers.reduce((sum, browser) => sum + browser.pages.length, 0)
+    const totalContexts = state.browsers.reduce(
+      (sum, browser) => sum + (browser.statistics?.contextCount || 0),
+      0
+    )
+    return {
+      totalBrowsers,
+      totalPages,
+      totalContexts,
+    }
+  })
+
 export const useBrowser = (browserId: string) =>
   useBrowserFleetStore((state) => state.getBrowser(browserId))
 export const usePage = (browserId: string, pageId: string) =>

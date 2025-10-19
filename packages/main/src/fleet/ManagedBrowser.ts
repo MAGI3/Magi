@@ -19,11 +19,13 @@ export interface ManagedBrowserOptions {
   browserEndpointTemplate: string;
   pageEndpointTemplate: string;
   onStateChange: () => void;
+  onCreatePageFromWindowOpen?: (url: string, afterPageId: string) => Promise<string>;
 }
 
 export interface CreateManagedPageOptions {
   url?: string | null;
   isActive?: boolean;
+  afterPageId?: string; // Insert new page after this page
 }
 
 export class ManagedBrowser {
@@ -80,6 +82,19 @@ export class ManagedBrowser {
     const pageId = randomUUID();
     const wsEndpoint = this.resolvePageEndpoint(pageId);
 
+    // Log page creation details
+    const currentPageIds = Array.from(this.pages.keys());
+    logger.info('Creating new page', {
+      browserId: this.browserId,
+      pageId,
+      url: options.url,
+      isActive: options.isActive,
+      afterPageId: options.afterPageId,
+      currentPageCount: this.pages.size,
+      currentPageIds,
+      hasAfterPageId: options.afterPageId ? this.pages.has(options.afterPageId) : false
+    });
+
     const page = new ManagedPage({
       browserId: this.browserId,
       pageId,
@@ -88,10 +103,68 @@ export class ManagedBrowser {
       wsEndpoint,
       initialUrl: options.url ?? null,
       isActive: options.isActive ?? false,
-      onStateChange: this.options.onStateChange
+      onStateChange: this.options.onStateChange,
+      onCreatePage: async (url: string, afterPageId: string) => {
+        // Handle window.open by delegating to BrowserFleetManager
+        logger.info('Handling window.open event', { url, afterPageId });
+        if (this.options.onCreatePageFromWindowOpen) {
+          return await this.options.onCreatePageFromWindowOpen(url, afterPageId);
+        }
+        // Fallback: create page locally (should not happen)
+        logger.warn('No onCreatePageFromWindowOpen handler, creating page locally');
+        const newPage = this.createPage({ url, afterPageId, isActive: true });
+        return newPage.pageId;
+      }
     });
 
-    this.pages.set(pageId, page);
+    // Insert page at the correct position
+    logger.info('Checking insert position conditions', {
+      pageId,
+      afterPageId: options.afterPageId,
+      hasAfterPageId: !!options.afterPageId,
+      afterPageIdType: typeof options.afterPageId,
+      afterPageIdExists: options.afterPageId ? this.pages.has(options.afterPageId) : false,
+      currentPageIds: Array.from(this.pages.keys())
+    });
+    
+    if (options.afterPageId && this.pages.has(options.afterPageId)) {
+      logger.info('Inserting page after specified page', {
+        pageId,
+        afterPageId: options.afterPageId
+      });
+      
+      // Insert after the specified page by rebuilding the Map
+      const newPages = new Map<string, ManagedPage>();
+      for (const [id, p] of this.pages) {
+        newPages.set(id, p);
+        if (id === options.afterPageId) {
+          newPages.set(pageId, page);
+          logger.info('Inserted page after', { afterPageId: id, newPageId: pageId });
+        }
+      }
+      this.pages.clear();
+      for (const [id, p] of newPages) {
+        this.pages.set(id, p);
+      }
+      
+      const finalPageIds = Array.from(this.pages.keys());
+      logger.info('Page insertion complete', {
+        finalPageCount: this.pages.size,
+        finalPageIds
+      });
+    } else {
+      logger.info('Adding page to end', {
+        pageId,
+        reason: options.afterPageId
+          ? 'afterPageId not found in pages'
+          : 'no afterPageId specified'
+      });
+      // Add to the end (default behavior)
+      this.pages.set(pageId, page);
+    }
+
+    // Sync the page order to the store
+    this.syncPageOrder();
 
     // Note: Navigation should be deferred until BrowserView is attached to window
     // This is now handled by BrowserFleetManager after attachActiveView()
@@ -142,6 +215,9 @@ export class ManagedBrowser {
       this.activePageId === pageId ? this.pages.keys().next().value ?? null : this.activePageId;
 
     this.store.removePage(this.browserId, pageId);
+
+    // Sync the updated page order to the store
+    this.syncPageOrder();
 
     if (shouldActivate) {
       this.setActivePage(shouldActivate);
@@ -197,6 +273,18 @@ export class ManagedBrowser {
     return this.options.pageEndpointTemplate
       .replace('{browserId}', this.browserId)
       .replace('{pageId}', pageId);
+  }
+
+  private syncPageOrder(): void {
+    // Sync the internal page order to the store's pageIds array
+    const pageIds = Array.from(this.pages.keys());
+    this.store.setPageOrder(this.browserId, pageIds);
+    
+    logger.info('Synced page order to store', {
+      browserId: this.browserId,
+      pageIds,
+      pageCount: pageIds.length
+    });
   }
 
   private notifyState() {

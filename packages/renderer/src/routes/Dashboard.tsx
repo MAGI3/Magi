@@ -77,7 +77,7 @@ export function Dashboard() {
             const pageCount = browser.pages.length;
 
             return (
-              <Grid.Col key={browser.browserId} span={{ base: 12, sm: 6, lg: 4 }}>
+              <Grid.Col key={browser.browserId} span={{ base: 12, sm: 6, md: 4, lg: 3, xl: 2.4 }}>
                 <Card
                   shadow="sm"
                   padding={0}

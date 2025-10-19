@@ -38,7 +38,8 @@ export const registerIpcHandlers = (ipcMain: IpcMain, fleetManager: BrowserFleet
         const page = fleetManager.createPage({
           browserId: action.browserId,
           url: action.payload?.url ?? null,
-          activate: action.payload?.activate ?? true
+          activate: action.payload?.activate ?? true,
+          afterPageId: action.payload?.afterPageId
         });
         if (page) {
           return { ok: true, pageId: page.pageId };

@@ -115,7 +115,7 @@ export class IpcClient {
 
   async createPage(
     browserId: string,
-    options?: { url?: string; activate?: boolean }
+    options?: { url?: string; activate?: boolean; afterPageId?: string }
   ): Promise<{ pageId: string }> {
     const result = await this.invoke({
       type: 'page:create',
@@ -123,6 +123,7 @@ export class IpcClient {
       payload: {
         activate: options?.activate ?? true,
         ...(options?.url && { url: options.url }),
+        ...(options?.afterPageId && { afterPageId: options.afterPageId }),
       }
     })
     return { pageId: result.pageId }

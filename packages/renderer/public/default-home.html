@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>新标签页</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      text-align: center;
+    }
+
+    .logo {
+      font-size: 48px;
+      font-weight: 700;
+      color: white;
+      margin-bottom: 40px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .search-container {
+      background: white;
+      border-radius: 50px;
+      padding: 8px 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      margin-bottom: 40px;
+    }
+
+    .search-input {
+      width: 100%;
+      border: none;
+      outline: none;
+      font-size: 16px;
+      padding: 12px 0;
+      color: #333;
+    }
+
+    .search-input::placeholder {
+      color: #999;
+    }
+
+    .quick-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 16px;
+      margin-top: 40px;
+    }
+
+    .quick-link {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 20px;
+      text-decoration: none;
+      color: white;
+      transition: all 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .quick-link:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .quick-link-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .quick-link-title {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .footer {
+      margin-top: 60px;
+      color: rgba(255, 255, 255, 0.8);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">Magi Browser</div>
+    
+    <div class="search-container">
+      <input 
+        type="text" 
+        class="search-input" 
+        placeholder="输入网址或搜索内容..."
+        id="searchInput"
+        autofocus
+      >
+    </div>
+
+    <div class="quick-links">
+      <a href="https://www.google.com" class="quick-link">
+        <div class="quick-link-icon">🔍</div>
+        <div class="quick-link-title">Google</div>
+      </a>
+      <a href="https://github.com" class="quick-link">
+        <div class="quick-link-icon">💻</div>
+        <div class="quick-link-title">GitHub</div>
+      </a>
+      <a href="https://stackoverflow.com" class="quick-link">
+        <div class="quick-link-icon">📚</div>
+        <div class="quick-link-title">StackOverflow</div>
+      </a>
+      <a href="https://www.youtube.com" class="quick-link">
+        <div class="quick-link-icon">📺</div>
+        <div class="quick-link-title">YouTube</div>
+      </a>
+    </div>
+
+    <div class="footer">
+      按 Enter 键开始搜索或访问网址
+    </div>
+  </div>
+
+  <script>
+    const searchInput = document.getElementById('searchInput');
+    
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const value = searchInput.value.trim();
+        if (value) {
+          let url = value;
+          
+          // 如果不包含协议，尝试智能判断
+          if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('file://')) {
+            // 如果看起来像域名（包含点且不包含空格）
+            if (url.includes('.') && !url.includes(' ')) {
+              url = 'https://' + url;
+            } else {
+              // 否则作为搜索查询
+              url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+            }
+          }
+          
+          // 在当前页面导航
+          window.location.href = url;
+        }
+      }
+    });
+  </script>
+</body>
+</html>

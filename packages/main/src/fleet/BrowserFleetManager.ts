@@ -1,5 +1,6 @@
-import { WebContentsView, BrowserWindow, type Rectangle } from 'electron';
+import { WebContentsView, BrowserWindow, type Rectangle, app } from 'electron';
 import { EventEmitter } from 'node:events';
+import * as path from 'node:path';
 import { BrowserFleetStateStore } from '@magi/shared-state';
 import type { BrowserFleetState } from '@magi/ipc-schema';
 import { logger } from '../utils/logger.js';
@@ -29,6 +30,7 @@ export interface CreatePageOptions {
   browserId: string;
   url?: string | null;
   activate?: boolean;
+  afterPageId?: string; // Insert new page after this page
 }
 
 export interface ClosePageOptions {
@@ -55,6 +57,15 @@ export class BrowserFleetManager {
 
   constructor(private readonly window: BrowserWindow) {
     this.contentBounds = window.getContentBounds();
+  }
+
+  private getDefaultHomeUrl(): string {
+    const isDev = process.env.NODE_ENV === 'development';
+    if (isDev) {
+      return 'http://localhost:5173/default-home.html';
+    } else {
+      return `file://${path.join(app.getAppPath(), 'packages/renderer/dist/default-home.html')}`;
+    }
   }
 
   setEndpointTemplates(options: { browser: string; page: string }) {
@@ -113,17 +124,46 @@ export class BrowserFleetManager {
         '{browserId}',
         '{browserId}'
       ),
-      onStateChange: () => this.emitState()
+      onStateChange: () => this.emitState(),
+      onCreatePageFromWindowOpen: async (url: string, afterPageId: string) => {
+        logger.info('Creating page from window.open via BrowserFleetManager', {
+          browserId: browser.browserId,
+          url,
+          afterPageId
+        });
+        const page = this.createPage({
+          browserId: browser.browserId,
+          url: url,
+          activate: true,
+          afterPageId: afterPageId
+        });
+        return page?.pageId || '';
+      }
     });
 
     this.browsers.set(browser.browserId, browser);
 
-    browser.createPage({
-      url: options.initialUrl ?? 'https://www.electronjs.org',
+    // Create initial page with default home or specified URL
+    const initialUrl = options.initialUrl ?? this.getDefaultHomeUrl();
+    const page = browser.createPage({
+      url: initialUrl,
       isActive: true
     });
 
+    // Attach view first, then navigate
     this.attachActiveView(browser.browserId);
+
+    // Navigate after BrowserView is attached to window
+    if (page) {
+      page.navigate(initialUrl).catch((error) => {
+        logger.error('Failed to navigate initial page', {
+          browserId: browser.browserId,
+          pageId: page.pageId,
+          url: initialUrl,
+          error
+        });
+      });
+    }
 
     return browser;
   }
@@ -147,26 +187,47 @@ export class BrowserFleetManager {
   }
 
   createPage(options: CreatePageOptions) {
+    logger.info('BrowserFleetManager.createPage called', {
+      browserId: options.browserId,
+      url: options.url,
+      activate: options.activate,
+      afterPageId: options.afterPageId,
+      hasAfterPageId: !!options.afterPageId
+    });
+
     const browser = this.browsers.get(options.browserId);
     if (!browser) {
       logger.warn('Browser not found when creating page', options.browserId);
       return;
     }
 
+    // Use default home URL if no URL provided (like createBrowser does)
+    const pageUrl = options.url ?? this.getDefaultHomeUrl();
+
+    logger.info('Calling browser.createPage with options', {
+      browserId: options.browserId,
+      url: pageUrl,
+      isActive: options.activate ?? true,
+      afterPageId: options.afterPageId,
+      currentPageCount: browser.pagesList.length
+    });
+
     const page = browser.createPage({
-      url: options.url ?? null,
-      isActive: options.activate ?? true
+      url: pageUrl,
+      isActive: options.activate ?? true,
+      afterPageId: options.afterPageId
     });
 
     if (options.activate ?? true) {
       this.attachActiveView(options.browserId);
       
       // Navigate after BrowserView is attached to window
-      if (options.url && page) {
-        page.navigate(options.url).catch((error) => {
+      if (page) {
+        page.navigate(pageUrl).catch((error) => {
           logger.error('Failed to navigate new page', {
             browserId: options.browserId,
             pageId: page.pageId,
+            url: pageUrl,
             error
           });
         });

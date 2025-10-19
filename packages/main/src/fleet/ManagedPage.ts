@@ -19,6 +19,7 @@ export interface ManagedPageOptions {
   favicon?: string | null;
   isActive?: boolean;
   onStateChange?: () => void;
+  onCreatePage?: (url: string, afterPageId: string) => Promise<string>;
 }
 
 export class ManagedPage {
@@ -52,7 +53,23 @@ export class ManagedPage {
     // WebContentsView 默认背景色是白色，设置为透明以保持与 BrowserView 相同的行为
     this.view.setBackgroundColor('#00000000');
 
-    this.view.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+    // Handle window.open - create new tab after current page
+    this.view.webContents.setWindowOpenHandler((details) => {
+      const { url } = details;
+      
+      // Use the callback to create a new page after this one
+      if (this.options.onCreatePage) {
+        this.options.onCreatePage(url, this.pageId).catch((err) => {
+          logger.error('Failed to create page from window.open', { url, error: err });
+        });
+      } else {
+        logger.warn('No onCreatePage callback provided, window.open denied', { url });
+      }
+      
+      // Return deny to prevent the default window from opening
+      return { action: 'deny' };
+    });
+    
     this.registerListeners();
 
     const pageModel = createManagedPage({

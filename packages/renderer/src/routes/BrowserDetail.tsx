@@ -48,6 +48,14 @@ export function BrowserDetail() {
 
   const activePage = getActivePage();
 
+  // Sync URL route with active page
+  useEffect(() => {
+    // 确保URL参数与实际激活的页面一致
+    if (activePage && browserId && activePage.pageId !== pageId) {
+      navigate(`/browser/${browserId}/${activePage.pageId}`, { replace: true });
+    }
+  }, [activePage?.pageId, browserId, pageId, navigate]);
+
   // Sync address bar with active page URL
   useEffect(() => {
     if (activePage?.url) {
@@ -57,10 +65,11 @@ export function BrowserDetail() {
 
   // Setup ResizeObserver to sync BrowserView bounds
   useEffect(() => {
-    if (!browserHostRef.current || !browserId || !pageId) return;
+    const activePageId = activePage?.pageId;
+    if (!browserHostRef.current || !browserId || !activePageId) return;
 
     const updateLayout = () => {
-      if (!browserHostRef.current) return;
+      if (!browserHostRef.current || !activePageId) return;
       
       const rect = browserHostRef.current.getBoundingClientRect();
       
@@ -69,7 +78,7 @@ export function BrowserDetail() {
       window.magiApi.invokeBrowserAction({
         type: 'layout:update',
         browserId,
-        pageId,
+        pageId: activePageId,
         bounds: {
           x: Math.round(rect.x),
           y: Math.round(rect.y),
@@ -95,7 +104,7 @@ export function BrowserDetail() {
       observer.disconnect();
       resizeObserverRef.current = null;
     };
-  }, [browserId, pageId]);
+  }, [browserId, activePage?.pageId]);
 
   // Cleanup: Detach BrowserView when component unmounts
   useEffect(() => {
@@ -140,17 +149,38 @@ export function BrowserDetail() {
   };
 
   const handleCreatePage = async () => {
-    if (browserId) {
-      const newPageId = await createPage();
-      if (newPageId) {
-        navigate(`/browser/${browserId}/${newPageId}`);
-      }
+    if (!browserId) return;
+    
+    // 手动创建标签页：不传 afterPageId，添加到最后
+    const newPageId = await createPage();
+    if (newPageId) {
+      // 导航到新创建的标签页
+      navigate(`/browser/${browserId}/${newPageId}`);
     }
   };
 
   const handleClosePage = async (targetPageId: string) => {
-    if (browserId && targetPageId) {
-      await closePage(targetPageId);
+    if (!browserId || !targetPageId) return;
+
+    const isClosingActivePage = targetPageId === activePage?.pageId;
+    const pageIndex = pages.findIndex(p => p.pageId === targetPageId);
+    
+    // 如果关闭的是激活页面，先切换到相邻的页面
+    if (isClosingActivePage && pages.length > 1) {
+      // 优先选择右侧的页面，如果没有则选择左侧
+      const nextPage = pages[pageIndex + 1] || pages[pageIndex - 1];
+      if (nextPage) {
+        await selectPage(nextPage.pageId);
+        navigate(`/browser/${browserId}/${nextPage.pageId}`);
+      }
+    }
+    
+    // 执行关闭操作
+    await closePage(targetPageId);
+    
+    // 如果关闭后没有页面了，返回到浏览器列表
+    if (pages.length === 1) {
+      navigate('/');
     }
   };
 
@@ -164,12 +194,12 @@ export function BrowserDetail() {
 
   const handleToggleDevTools = () => {
     setShowDevTools((prev) => !prev);
-    // TODO: Send IPC to toggle DevTools in main process
-    if (browserId && pageId) {
+    const activePageId = activePage?.pageId;
+    if (browserId && activePageId) {
       window.magiApi.invokeBrowserAction({
         type: 'devtools:toggle',
         browserId,
-        pageId,
+        pageId: activePageId,
       }).catch((err) => {
         console.error('Failed to toggle DevTools:', err);
       });
@@ -208,7 +238,7 @@ export function BrowserDetail() {
             <Tooltip label="后退">
               <ActionIcon
                 variant="subtle"
-                onClick={() => pageId && goBack(pageId)}
+                onClick={() => activePage?.pageId && goBack(activePage.pageId)}
                 disabled={!activePage?.navigationState?.canGoBack}
                 size="md"
               >
@@ -218,7 +248,7 @@ export function BrowserDetail() {
             <Tooltip label="前进">
               <ActionIcon
                 variant="subtle"
-                onClick={() => pageId && goForward(pageId)}
+                onClick={() => activePage?.pageId && goForward(activePage.pageId)}
                 disabled={!activePage?.navigationState?.canGoForward}
                 size="md"
               >
@@ -228,7 +258,7 @@ export function BrowserDetail() {
             <Tooltip label="刷新">
               <ActionIcon
                 variant="subtle"
-                onClick={() => pageId && reloadPage(pageId)}
+                onClick={() => activePage?.pageId && reloadPage(activePage.pageId)}
                 loading={activePage?.navigationState?.isLoading}
                 size="md"
               >
@@ -349,10 +379,10 @@ export function BrowserDetail() {
         {pages.map((page) => (
           <div
             key={page.pageId}
-            ref={page.pageId === pageId ? browserHostRef : null}
+            ref={page.pageId === activePage?.pageId ? browserHostRef : null}
             className="browser-host w-full h-full"
             style={{
-              display: page.pageId === pageId ? 'block' : 'none',
+              display: page.pageId === activePage?.pageId ? 'block' : 'none',
               minHeight: '400px',
             }}
           >

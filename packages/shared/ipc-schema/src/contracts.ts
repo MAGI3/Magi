@@ -66,6 +66,7 @@ export const ManagedBrowserSchema = z.object({
   version: z.string().optional(),
   userAgent: z.string().optional(),
   activePageId: PageIdSchema.optional().nullable(),
+  pageIds: z.array(PageIdSchema), // Ordered list of page IDs to maintain tab order
   pages: z.array(ManagedPageSchema)
 });
 
@@ -82,7 +83,8 @@ export const CreateBrowserOptionsSchema = z.object({
 
 export const CreatePageOptionsSchema = z.object({
   url: UrlSchema.optional(),
-  activate: z.boolean().optional().default(true)
+  activate: z.boolean().optional().default(true),
+  afterPageId: PageIdSchema.optional() // Insert new page after this page
 });
 
 export const RectangleSchema = z.object({

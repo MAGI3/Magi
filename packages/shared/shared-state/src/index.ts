@@ -88,6 +88,7 @@ export const createManagedBrowser = (input: CreateManagedBrowserInput): ManagedB
     version: input.version,
     userAgent: input.userAgent,
     activePageId: null,
+    pageIds: [],
     pages: [],
     createdAt: timestamp,
     updatedAt: timestamp
@@ -125,6 +126,7 @@ export class BrowserFleetStateStore {
     state.browsers.forEach((browser: ManagedBrowser) => {
       const browserModel: ManagedBrowserModel = {
         ...browser,
+        pageIds: browser.pageIds || [],
         createdAt: now(),
         updatedAt: now()
       };
@@ -159,6 +161,7 @@ export class BrowserFleetStateStore {
         version: browser.version,
         userAgent: browser.userAgent,
         activePageId: browser.activePageId ?? null,
+        pageIds: browser.pageIds,
         pages: this.getPagesForBrowser(browser.browserId).map((page) => ({
           pageId: page.pageId,
           title: page.title,
@@ -186,7 +189,21 @@ export class BrowserFleetStateStore {
   }
 
   getPagesForBrowser(browserId: BrowserId): ManagedPageModel[] {
-    return Array.from(this.pages.values()).filter((page) => page.browserId === browserId);
+    const browser = this.browsers.get(browserId);
+    if (!browser) {
+      return [];
+    }
+
+    // Use pageIds array to maintain correct order
+    const orderedPages: ManagedPageModel[] = [];
+    for (const pageId of browser.pageIds) {
+      const page = this.pages.get(pageId);
+      if (page && page.browserId === browserId) {
+        orderedPages.push(page);
+      }
+    }
+
+    return orderedPages;
   }
 
   upsertBrowser(browser: ManagedBrowserModel): void {
@@ -208,8 +225,13 @@ export class BrowserFleetStateStore {
 
     const browser = this.browsers.get(page.browserId);
     if (browser) {
+      // Add pageId to pageIds array if not already present
+      if (!browser.pageIds.includes(page.pageId)) {
+        browser.pageIds.push(page.pageId);
+      }
+      
       browser.updatedAt = now();
-      browser.statistics.pageCount = this.getPagesForBrowser(page.browserId).length;
+      browser.statistics.pageCount = browser.pageIds.length;
       if (page.isActive) {
         browser.activePageId = page.pageId;
       }
@@ -225,6 +247,9 @@ export class BrowserFleetStateStore {
 
     const browser = this.browsers.get(browserId);
     if (!browser) return;
+
+    // Remove pageId from pageIds array
+    browser.pageIds = browser.pageIds.filter(id => id !== pageId);
 
     const remainingPages = this.getPagesForBrowser(browserId);
     browser.statistics.pageCount = remainingPages.length;
@@ -322,6 +347,15 @@ export class BrowserFleetStateStore {
     });
 
     browser.activePageId = pageId ?? null;
+    browser.updatedAt = now();
+    this.browsers.set(browserId, browser);
+  }
+
+  setPageOrder(browserId: BrowserId, pageIds: PageId[]): void {
+    const browser = this.browsers.get(browserId);
+    if (!browser) return;
+
+    browser.pageIds = pageIds;
     browser.updatedAt = now();
     this.browsers.set(browserId, browser);
   }

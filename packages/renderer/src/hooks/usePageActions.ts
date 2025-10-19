@@ -7,9 +7,9 @@ export function usePageActions(browserId: string) {
 
   const browser = browsers.find((b: ManagedBrowser) => b.browserId === browserId)
 
-  const createPage = async () => {
+  const createPage = async (url?: string, afterPageId?: string) => {
     try {
-      const result = await ipcClient.createPage(browserId)
+      const result = await ipcClient.createPage(browserId, { url, afterPageId })
       return result.pageId
     } catch (error) {
       console.error('Failed to create page:', error)
