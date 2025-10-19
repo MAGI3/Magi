@@ -10,8 +10,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "electron-vite dev --config electron.vite.config.ts",
-    "build": "electron-vite build --config electron.vite.config.ts && electron-builder",
+    "dev": "NODE_ENV=development electron-vite dev --config electron.vite.config.ts",
+    "build": "NODE_ENV=production electron-vite build --config electron.vite.config.ts && electron-builder",
     "preview": "electron-vite preview --config electron.vite.config.ts",
     "lint": "pnpm --recursive run lint",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
@@ -20,7 +20,9 @@
     "clean": "rimraf node_modules pnpm-lock.yaml dist out build"
   },
   "devDependencies": {
+    "@playwright/test": "^1.56.1",
     "@types/node": "^22.7.4",
+    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^8.9.0",
     "@typescript-eslint/parser": "^8.9.0",
     "@vitejs/plugin-react": "^4.3.3",
@@ -31,12 +33,16 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "playwright": "^1.56.1",
     "prettier": "^3.3.3",
     "rimraf": "^6.0.1",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "ws": "^8.18.0"
   },
   "dependencies": {
+    "@types/koa-bodyparser": "^4.3.12",
     "bufferutil": "^4.0.9",
+    "koa-bodyparser": "^4.4.1",
     "utf-8-validate": "^6.0.5"
   }
 }

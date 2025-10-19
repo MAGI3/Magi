@@ -250,6 +250,14 @@ export class CdpSessionManager extends EventEmitter {
         }
       }
     }
+
+    // 发出内部事件，用于 UI 同步
+    // 监听关键的页面事件来更新 UI 状态
+    this.emit('cdp-event', {
+      pageId,
+      method,
+      params
+    });
   }
 
   /**

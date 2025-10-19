@@ -5,6 +5,7 @@ import { registerIpcHandlers } from './ipc/registerHandlers.js';
 import { MainWindow } from './app/MainWindow.js';
 import { BrowserFleetManager } from './fleet/BrowserFleetManager.js';
 import { CdpGateway } from './cdp/CdpGateway.js';
+import { CdpSessionManager } from './cdp/CdpSessionManager.js';
 import { ThumbnailScheduler } from './fleet/ThumbnailScheduler.js';
 import { logger } from './utils/logger.js';
 
@@ -31,8 +32,19 @@ let cdpGateway: CdpGateway | null = null;
 let thumbnailScheduler: ThumbnailScheduler | null = null;
 
 const createServiceInstances = async (window: BrowserWindow) => {
-  fleetManager = new BrowserFleetManager(window);
-  cdpGateway = new CdpGateway(fleetManager, { port: 9222 });
+  // 1. Create CdpSessionManager first
+  const cdpSessionManager = new CdpSessionManager();
+  
+  // 2. Create BrowserFleetManager with cdpSessionManager
+  fleetManager = new BrowserFleetManager(window, cdpSessionManager);
+  
+  // 3. Create CdpGateway with all dependencies
+  cdpGateway = new CdpGateway(fleetManager, cdpSessionManager, { port: 9222 });
+  
+  // 4. Delayed injection to break circular dependency
+  fleetManager.setCdpGateway(cdpGateway);
+  
+  // 5. Create other services
   thumbnailScheduler = new ThumbnailScheduler(fleetManager);
 
   await cdpGateway.start();

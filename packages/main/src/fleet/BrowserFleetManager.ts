@@ -6,6 +6,8 @@ import type { BrowserFleetState } from '@magi/ipc-schema';
 import { logger } from '../utils/logger.js';
 import { ManagedBrowser } from './ManagedBrowser.js';
 import { ManagedPage } from './ManagedPage.js';
+import type { CdpSessionManager } from '../cdp/CdpSessionManager.js';
+import type { CdpGateway } from '../cdp/CdpGateway.js';
 
 export interface CreateBrowserOptions {
   name?: string;
@@ -55,8 +57,87 @@ export class BrowserFleetManager {
   private pageEndpointTemplate =
     'ws://localhost:9222/devtools/page/{pageId}';
 
-  constructor(private readonly window: BrowserWindow) {
+  constructor(
+    private readonly window: BrowserWindow,
+    private readonly cdpSessionManager?: CdpSessionManager,
+    private cdpGateway?: CdpGateway
+  ) {
     this.contentBounds = window.getContentBounds();
+    
+    // Listen to CDP events from CdpSessionManager for CDP → UI synchronization
+    if (this.cdpSessionManager) {
+      this.cdpSessionManager.on('cdp-event', this.handleCdpEvent.bind(this));
+      logger.info('BrowserFleetManager: Listening to CDP events from CdpSessionManager');
+    }
+  }
+
+  /**
+   * Set the CDP gateway instance (used for delayed injection to break circular dependency)
+   */
+  setCdpGateway(gateway: CdpGateway) {
+    this.cdpGateway = gateway;
+    logger.info('BrowserFleetManager: CDP Gateway injected');
+  }
+
+  /**
+   * Handle CDP events from CdpSessionManager to update UI state (CDP → UI sync)
+   */
+  private handleCdpEvent(event: {
+    pageId: string;
+    method: string;
+    params: Record<string, unknown>;
+  }) {
+    logger.debug('BrowserFleetManager: Received CDP event', {
+      pageId: event.pageId,
+      method: event.method
+    });
+
+    const page = this.getPage(event.pageId);
+    if (!page) {
+      logger.warn('BrowserFleetManager: Page not found for CDP event', {
+        pageId: event.pageId,
+        method: event.method
+      });
+      return;
+    }
+
+    // Update page state based on CDP events
+    switch (event.method) {
+      case 'Page.frameNavigated':
+        if (event.params.frame && typeof event.params.frame === 'object') {
+          const frame = event.params.frame as { url?: string };
+          if (frame.url && typeof frame.url === 'string') {
+            logger.info('BrowserFleetManager: Updating page URL from CDP event', {
+              pageId: event.pageId,
+              url: frame.url
+            });
+            // The ManagedPage already handles navigation events through webContents listeners
+            // This is just for additional synchronization if needed
+          }
+        }
+        break;
+
+      case 'Page.loadEventFired':
+        logger.debug('BrowserFleetManager: Page load event fired', {
+          pageId: event.pageId
+        });
+        // ManagedPage handles this through did-finish-load
+        break;
+
+      case 'Page.domContentEventFired':
+        logger.debug('BrowserFleetManager: DOM content loaded', {
+          pageId: event.pageId
+        });
+        // ManagedPage handles this through dom-ready
+        break;
+
+      default:
+        // Other CDP events can be handled here as needed
+        break;
+    }
+
+    // Emit state update to keep UI in sync
+    this.emitState();
   }
 
   private getDefaultHomeUrl(): string {
@@ -235,6 +316,23 @@ export class BrowserFleetManager {
     }
 
     this.emitState();
+
+    // UI → CDP sync: Broadcast Target.targetCreated event to CDP clients
+    if (page && this.cdpGateway) {
+      const model = this.store.getPage(page.pageId);
+      if (model) {
+        this.cdpGateway.broadcastTargetCreated(options.browserId, {
+          pageId: page.pageId,
+          url: model.url ?? 'about:blank',
+          title: model.title ?? ''
+        });
+        logger.info('BrowserFleetManager: Broadcasted Target.targetCreated', {
+          browserId: options.browserId,
+          pageId: page.pageId
+        });
+      }
+    }
+
     return page;
   }
 
@@ -246,6 +344,15 @@ export class BrowserFleetManager {
 
     this.attachActiveView(options.browserId);
     this.emitState();
+
+    // UI → CDP sync: Broadcast Target.targetDestroyed event to CDP clients
+    if (this.cdpGateway) {
+      this.cdpGateway.broadcastTargetDestroyed(options.browserId, options.pageId);
+      logger.info('BrowserFleetManager: Broadcasted Target.targetDestroyed', {
+        browserId: options.browserId,
+        pageId: options.pageId
+      });
+    }
   }
 
   selectPage(options: SelectPageOptions) {

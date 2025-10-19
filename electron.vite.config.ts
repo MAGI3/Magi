@@ -5,6 +5,9 @@ import { resolve } from 'path'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
+    },
     build: {
       outDir: 'dist/main',
       lib: {
