@@ -1,7 +1,13 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, exec, type ChildProcess } from 'child_process';
+import { promisify } from 'util';
 import { chromium } from '@playwright/test';
+import { writeFileSync } from 'fs';
+import { join } from 'path';
+
+const execAsync = promisify(exec);
 
 const CDP_BASE_URL = 'http://localhost:9222';
+const PID_FILE = join(process.cwd(), '.electron-test-pid');
 let electronProcess: ChildProcess | null = null;
 
 async function waitForCdpEndpoint(url: string, timeout = 30000): Promise<boolean> {
@@ -27,7 +33,11 @@ async function globalSetup() {
   // 启动 Electron 应用
   electronProcess = spawn('pnpm', ['dev'], {
     cwd: process.cwd(),
-    env: { ...process.env },
+    env: { 
+      ...process.env,
+      DISABLE_FILE_LOG: 'true',  // 禁用文件日志，仅输出到控制台
+      LOG_LEVEL: 'debug'         // 设置为 debug 级别以输出所有调试信息
+    },
     shell: true,
   });
 
@@ -58,9 +68,28 @@ async function globalSetup() {
   console.log('Waiting for CDP endpoint to be ready...');
   await waitForCdpEndpoint(CDP_BASE_URL);
 
-  // 将进程 PID 保存到环境变量，供 teardown 使用
-  if (electronProcess.pid) {
-    process.env.ELECTRON_PID = electronProcess.pid.toString();
+  // 查找并保存真正的 Electron 主进程 PID
+  try {
+    // 在 macOS 上，查找包含 Electron.app 的主进程
+    const { stdout } = await execAsync('pgrep -f "Electron.app/Contents/MacOS/Electron"');
+    const pids = stdout.trim().split('\n').filter(pid => pid);
+    
+    if (pids.length > 0) {
+      // 通常第一个是主进程
+      const electronPid = pids[0];
+      writeFileSync(PID_FILE, electronPid, 'utf-8');
+      console.log(`Found Electron main process PID: ${electronPid}`);
+      console.log(`All Electron PIDs: ${pids.join(', ')}`);
+    } else {
+      throw new Error('No Electron process found');
+    }
+  } catch (error) {
+    console.error('Failed to find Electron PID:', error);
+    // 回退到使用 spawn 返回的 PID
+    if (electronProcess.pid) {
+      writeFileSync(PID_FILE, electronProcess.pid.toString(), 'utf-8');
+      console.log(`Fallback: using spawn PID ${electronProcess.pid}`);
+    }
   }
 
   console.log('Electron application is ready for testing');
