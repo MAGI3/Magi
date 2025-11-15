@@ -1,14 +1,10 @@
-import { spawn, exec, type ChildProcess } from 'child_process';
-import { promisify } from 'util';
-import { chromium } from '@playwright/test';
-import { writeFileSync } from 'fs';
-import { join } from 'path';
+import { _electron } from 'playwright';
 
-const execAsync = promisify(exec);
-
+import { writeFileSync, existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { spawn, exec } from 'node:child_process';
 const CDP_BASE_URL = 'http://localhost:9222';
 const PID_FILE = join(process.cwd(), '.electron-test-pid');
-let electronProcess: ChildProcess | null = null;
 
 async function waitForCdpEndpoint(url: string, timeout = 30000): Promise<boolean> {
   const startTime = Date.now();
@@ -16,83 +12,81 @@ async function waitForCdpEndpoint(url: string, timeout = 30000): Promise<boolean
     try {
       const response = await fetch(`${url}/json/version`);
       if (response.ok) {
-        console.log('CDP endpoint is ready');
         return true;
       }
-    } catch (error) {
-      // 端点尚未就绪，继续等待
-    }
+    } catch {}
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   throw new Error(`CDP endpoint not available after ${timeout}ms`);
 }
 
+async function ensureBuilt() {
+  await new Promise<void>((resolvePromise, reject) => {
+    const p = spawn('pnpm', ['exec', 'electron-vite', 'build', '--config', 'electron.vite.config.ts'], {
+      cwd: process.cwd(),
+      env: { ...process.env, NODE_ENV: 'development', TEST_ELECTRON_FORCE_DEV: '1' },
+      shell: true,
+    });
+    p.on('error', reject);
+    p.on('exit', code => {
+      if (code === 0) resolvePromise(); else reject(new Error(`electron-vite build failed: ${code}`));
+    });
+  });
+}
+
+async function findElectronPid(): Promise<number | null> {
+  return new Promise<number | null>((resolvePid) => {
+    const child = exec('pgrep -f "Electron.app/Contents/MacOS/Electron"', { shell: true }, (error, stdout) => {
+      if (error) {
+        resolvePid(null);
+        return;
+      }
+      const pids = stdout.trim().split('\n').filter(Boolean);
+      resolvePid(pids.length ? parseInt(pids[0], 10) : null);
+    });
+    child.on('error', () => resolvePid(null));
+  });
+}
+
 async function globalSetup() {
-  console.log('Starting Electron application for all test workers...');
-  
-  // 启动 Electron 应用
-  electronProcess = spawn('pnpm', ['dev'], {
-    cwd: process.cwd(),
-    env: { 
+  const mode = process.env.TEST_ELECTRON_MODE ?? 'build';
+  if (mode === 'hot') {
+    const dev = spawn('pnpm', ['dev'], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DISABLE_FILE_LOG: 'true',
+        LOG_LEVEL: 'debug'
+      },
+      shell: true
+    });
+    dev.stdout?.on('data', (data) => process.stdout.write(`[Electron stdout] ${data}`));
+    dev.stderr?.on('data', (data) => process.stderr.write(`[Electron stderr] ${data}`));
+    await waitForCdpEndpoint(CDP_BASE_URL);
+    const pid = await findElectronPid();
+    if (pid) writeFileSync(PID_FILE, String(pid), 'utf-8');
+    return;
+  }
+
+  await ensureBuilt();
+  const rendererIndex = resolve(process.cwd(), 'dist/renderer/index.html');
+  const electronApp = await _electron.launch({
+    args: [process.cwd()],
+    env: {
       ...process.env,
-      DISABLE_FILE_LOG: 'true',  // 禁用文件日志，仅输出到控制台
-      LOG_LEVEL: 'debug'         // 设置为 debug 级别以输出所有调试信息
-    },
-    shell: true,
+      NODE_ENV: 'development',
+      ELECTRON_START_URL: `file://${rendererIndex}`,
+      DISABLE_FILE_LOG: 'true',
+      LOG_LEVEL: 'debug'
+    }
   });
-
-  // 捕获标准输出
-  if (electronProcess.stdout) {
-    electronProcess.stdout.on('data', (data) => {
-      console.log(`[Electron stdout] ${data.toString().trim()}`);
-    });
-  }
-
-  // 捕获标准错误
-  if (electronProcess.stderr) {
-    electronProcess.stderr.on('data', (data) => {
-      console.error(`[Electron stderr] ${data.toString().trim()}`);
-    });
-  }
-
-  // 监听进程错误和退出
-  electronProcess.on('error', (error) => {
-    console.error('Failed to start Electron process:', error);
-  });
-
-  electronProcess.on('close', (code) => {
-    console.log(`Electron process exited with code ${code}`);
-  });
-
-  // 等待 CDP 端点可用
-  console.log('Waiting for CDP endpoint to be ready...');
+  electronApp.process().stdout?.on('data', (data) => process.stdout.write(`[Electron STDOUT] ${data}`));
+  electronApp.process().stderr?.on('data', (data) => process.stderr.write(`[Electron STDERR] ${data}`));
+  const window = await electronApp.firstWindow();
+  await window.waitForLoadState('domcontentloaded');
   await waitForCdpEndpoint(CDP_BASE_URL);
-
-  // 查找并保存真正的 Electron 主进程 PID
-  try {
-    // 在 macOS 上，查找包含 Electron.app 的主进程
-    const { stdout } = await execAsync('pgrep -f "Electron.app/Contents/MacOS/Electron"');
-    const pids = stdout.trim().split('\n').filter(pid => pid);
-    
-    if (pids.length > 0) {
-      // 通常第一个是主进程
-      const electronPid = pids[0];
-      writeFileSync(PID_FILE, electronPid, 'utf-8');
-      console.log(`Found Electron main process PID: ${electronPid}`);
-      console.log(`All Electron PIDs: ${pids.join(', ')}`);
-    } else {
-      throw new Error('No Electron process found');
-    }
-  } catch (error) {
-    console.error('Failed to find Electron PID:', error);
-    // 回退到使用 spawn 返回的 PID
-    if (electronProcess.pid) {
-      writeFileSync(PID_FILE, electronProcess.pid.toString(), 'utf-8');
-      console.log(`Fallback: using spawn PID ${electronProcess.pid}`);
-    }
-  }
-
-  console.log('Electron application is ready for testing');
+  const pid = electronApp.process().pid;
+  if (pid) writeFileSync(PID_FILE, String(pid), 'utf-8');
 }
 
 export default globalSetup;

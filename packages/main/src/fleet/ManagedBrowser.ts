@@ -270,9 +270,18 @@ export class ManagedBrowser {
   }
 
   private resolvePageEndpoint(pageId: string): string {
-    return this.options.pageEndpointTemplate
+    const resolved = this.options.pageEndpointTemplate
       .replace('{browserId}', this.browserId)
       .replace('{pageId}', pageId);
+    
+    logger.info('[ManagedBrowser] Resolving page endpoint', {
+      browserId: this.browserId,
+      pageId,
+      template: this.options.pageEndpointTemplate,
+      resolved
+    });
+    
+    return resolved;
   }
 
   private syncPageOrder(): void {

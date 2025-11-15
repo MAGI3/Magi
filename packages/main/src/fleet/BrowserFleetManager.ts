@@ -301,18 +301,20 @@ export class BrowserFleetManager {
 
     if (options.activate ?? true) {
       this.attachActiveView(options.browserId);
-      
-      // Navigate after BrowserView is attached to window
-      if (page) {
-        page.navigate(pageUrl).catch((error) => {
-          logger.error('Failed to navigate new page', {
-            browserId: options.browserId,
-            pageId: page.pageId,
-            url: pageUrl,
-            error
-          });
+    }
+    
+    // Navigate all pages (both active and inactive) to ensure WebContents is properly initialized
+    // This is critical for CDP operations - even non-activated pages need initialized WebContents
+    if (page) {
+      page.navigate(pageUrl).catch((error) => {
+        logger.error('Failed to navigate new page', {
+          browserId: options.browserId,
+          pageId: page.pageId,
+          url: pageUrl,
+          activate: options.activate,
+          error
         });
-      }
+      });
     }
 
     this.emitState();

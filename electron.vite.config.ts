@@ -6,7 +6,9 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     define: {
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV)
+      'process.env.NODE_ENV': JSON.stringify(
+        process.env.TEST_ELECTRON_FORCE_DEV === '1' ? 'development' : process.env.NODE_ENV
+      )
     },
     build: {
       outDir: 'dist/main',

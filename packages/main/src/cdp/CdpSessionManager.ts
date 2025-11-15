@@ -91,14 +91,14 @@ export class CdpSessionManager extends EventEmitter {
     // 添加客户端
     session.clients.add(clientId);
     session.clientsMap.set(clientId, client);
-    logger.info(`CDP client ${clientId} attached to page ${pageId}, total clients: ${session.clients.size}`);
+    logger.debug(`CDP client ${clientId} attached to page ${pageId}, total clients: ${session.clients.size}`);
 
     // 如果 debugger 还未附加，则附加
     if (!session.attached && !webContents.isDestroyed()) {
       try {
         await webContents.debugger.attach('1.3');
         session.attached = true;
-        logger.info(`Debugger attached to page ${pageId}`);
+        logger.debug(`Debugger attached to page ${pageId}`);
 
         // 监听 debugger 消息
         const messageHandler = (
@@ -117,7 +117,7 @@ export class CdpSessionManager extends EventEmitter {
           _event: { preventDefault: () => void; readonly defaultPrevented: boolean },
           reason: string
         ) => {
-          logger.info(`Debugger detached from page ${pageId}, reason: ${reason}`);
+          logger.debug(`Debugger detached from page ${pageId}, reason: ${reason}`);
           session!.attached = false;
           webContents.debugger.removeListener('message', messageHandler);
           webContents.debugger.removeListener('detach', detachHandler);
@@ -142,7 +142,7 @@ export class CdpSessionManager extends EventEmitter {
 
     session.clients.delete(clientId);
     session.clientsMap.delete(clientId);
-    logger.info(`CDP client ${clientId} detached from page ${pageId}, remaining clients: ${session.clients.size}`);
+    logger.debug(`CDP client ${clientId} detached from page ${pageId}, remaining clients: ${session.clients.size}`);
 
     // 如果没有客户端了，分离 debugger
     if (session.clients.size === 0 && session.attached) {
@@ -154,7 +154,7 @@ export class CdpSessionManager extends EventEmitter {
         logger.error(`Failed to detach debugger from page ${pageId}:`, error);
       }
       this.sessions.delete(pageId);
-      logger.info(`Session for page ${pageId} removed`);
+      logger.debug(`Session for page ${pageId} removed`);
     }
   }
 
@@ -162,6 +162,12 @@ export class CdpSessionManager extends EventEmitter {
    * 处理来自客户端的 CDP 消息
    */
   async handleClientMessage(pageId: string, clientId: string, message: string): Promise<void> {
+    logger.info('[CdpSessionManager] Received CDP message from client', {
+      pageId,
+      clientId,
+      messagePreview: message.substring(0, 200)
+    });
+
     const session = this.sessions.get(pageId);
     if (!session) {
       logger.error(`Session not found for page ${pageId}`);
@@ -184,6 +190,14 @@ export class CdpSessionManager extends EventEmitter {
 
     const { id, method, params } = cdpMessage;
 
+    logger.info('[CdpSessionManager] Parsed CDP message', {
+      pageId,
+      clientId,
+      id,
+      method,
+      params
+    });
+
     if (!method) {
       logger.error(`CDP message missing method field from client ${clientId}`);
       return;
@@ -200,16 +214,62 @@ export class CdpSessionManager extends EventEmitter {
         throw new Error('WebContents is destroyed');
       }
 
+      logger.info('[CdpSessionManager] Sending command to Electron debugger', {
+        pageId,
+        method,
+        params
+      });
+
       const result = await session.webContents.debugger.sendCommand(method, params);
+
+      logger.info('[CdpSessionManager] Received result from Electron debugger', {
+        pageId,
+        method,
+        id,
+        result
+      });
 
       // 发送响应回客户端
       if (typeof id === 'number') {
         const response: CdpMessage = { id, result };
-        client.send(JSON.stringify(response));
+        const responseStr = JSON.stringify(response);
+        
+        logger.info('[CdpSessionManager] Preparing to send response to client', {
+          pageId,
+          clientId,
+          id,
+          responseLength: responseStr.length,
+          responsePreview: responseStr.substring(0, 200)
+        });
+        
+        try {
+          client.send(responseStr);
+          logger.info('[CdpSessionManager] client.send() called successfully', {
+            pageId,
+            clientId,
+            id
+          });
+        } catch (sendError) {
+          logger.error('[CdpSessionManager] EXCEPTION during client.send()', {
+            pageId,
+            clientId,
+            id,
+            error: sendError,
+            errorMessage: sendError instanceof Error ? sendError.message : 'Unknown'
+          });
+          throw sendError;
+        }
+        
         session.pendingMessages.delete(id);
+        
+        logger.info('[CdpSessionManager] Response sent successfully - completed', {
+          pageId,
+          clientId,
+          id
+        });
       }
     } catch (error) {
-      logger.error(`Failed to send command ${method} to page ${pageId}:`, error);
+      logger.error(`[CdpSessionManager] Failed to send command ${method} to page ${pageId}:`, error);
 
       // 发送错误响应
       if (typeof id === 'number') {
@@ -220,7 +280,30 @@ export class CdpSessionManager extends EventEmitter {
             message: error instanceof Error ? error.message : 'Unknown error'
           }
         };
-        client.send(JSON.stringify(errorResponse));
+        
+        logger.info('[CdpSessionManager] Sending error response to client', {
+          pageId,
+          clientId,
+          id,
+          error: errorResponse.error
+        });
+        
+        try {
+          client.send(JSON.stringify(errorResponse));
+          logger.info('[CdpSessionManager] Error response sent successfully', {
+            pageId,
+            clientId,
+            id
+          });
+        } catch (sendError) {
+          logger.error('[CdpSessionManager] EXCEPTION during error response send', {
+            pageId,
+            clientId,
+            id,
+            sendError
+          });
+        }
+        
         session.pendingMessages.delete(id);
       }
     }
@@ -282,6 +365,6 @@ export class CdpSessionManager extends EventEmitter {
       }
     }
     this.sessions.clear();
-    logger.info('CdpSessionManager cleaned up');
+    logger.debug('CdpSessionManager cleaned up');
   }
 }

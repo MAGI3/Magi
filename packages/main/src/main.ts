@@ -9,7 +9,9 @@ import { CdpSessionManager } from './cdp/CdpSessionManager.js';
 import { ThumbnailScheduler } from './fleet/ThumbnailScheduler.js';
 import { logger } from './utils/logger.js';
 
-if (!app.requestSingleInstanceLock()) {
+// Skip single instance lock in test environment to avoid conflicts
+const isTest = process.env.NODE_ENV === 'test' || process.env.CI === 'true';
+if (!isTest && !app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }
@@ -64,9 +66,10 @@ const createWindow = async () => {
 
   await createServiceInstances(mainWindow.browserWindow);
 
-  const url = isDev
-    ? process.env.ELECTRON_START_URL ?? 'http://localhost:5173'
-    : `file://${path.join(app.getAppPath(), 'packages/renderer/dist/index.html')}`;
+  const envUrl = process.env.ELECTRON_START_URL;
+  const url = envUrl
+    ? envUrl
+    : (isDev ? 'http://localhost:5173' : `file://${path.join(app.getAppPath(), 'packages/renderer/dist/index.html')}`);
 
   await mainWindow.load(url);
 };

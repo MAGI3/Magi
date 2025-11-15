@@ -196,8 +196,37 @@ test.describe('CDP Gateway - Browser WebSocket Endpoint', () => {
     // 启用 Target 发现
     await sendCdpCommand(ws, messageId++, 'Target.setDiscoverTargets', { discover: true });
 
-    // 等待 targetCreated 事件
-    const targetCreatedPromise = waitForMessage(ws, 'Target.targetCreated');
+    // 获取现有 targets 数量，以便后续过滤新创建的
+    const existingTargets = await sendCdpCommand(ws, messageId++, 'Target.getTargets');
+    const existingTargetIds = new Set(
+      existingTargets.targetInfos.map((t: any) => t.targetId)
+    );
+
+    // 设置一个过滤器，只接受新的 targetCreated 事件
+    const waitForNewTarget = new Promise<any>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Timeout waiting for new Target.targetCreated'));
+      }, 5000);
+
+      const handler = (data: WebSocket.Data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          if (message.method === 'Target.targetCreated') {
+            const targetId = message.params.targetInfo.targetId;
+            // 只接受新的 target（不在现有列表中的）
+            if (!existingTargetIds.has(targetId)) {
+              clearTimeout(timer);
+              ws.off('message', handler);
+              resolve(message);
+            }
+          }
+        } catch (e) {
+          // 忽略解析错误
+        }
+      };
+
+      ws.on('message', handler);
+    });
 
     // 创建新页面
     const createResult = await sendCdpCommand(ws, messageId++, 'Target.createTarget', {
@@ -208,7 +237,7 @@ test.describe('CDP Gateway - Browser WebSocket Endpoint', () => {
     const targetId = createResult.targetId;
 
     // 验证收到 targetCreated 事件
-    const targetCreatedEvent = await targetCreatedPromise;
+    const targetCreatedEvent = await waitForNewTarget;
     expect(targetCreatedEvent.params.targetInfo.targetId).toBe(targetId);
     expect(targetCreatedEvent.params.targetInfo.type).toBe('page');
   });
@@ -442,15 +471,35 @@ test.describe('CDP Gateway - UI Synchronization', () => {
     await sendCdpCommand(ws1, 1, 'Target.setDiscoverTargets', { discover: true });
     await sendCdpCommand(ws2, 1, 'Target.setDiscoverTargets', { discover: true });
 
-    // 客户端 2 等待 targetCreated 事件
-    const targetCreatedPromise = waitForMessage(ws2, 'Target.targetCreated');
-
     // 客户端 1 创建新页面
     const createResult = await sendCdpCommand(ws1, 2, 'Target.createTarget', {
       url: 'about:blank',
     });
 
-    // 客户端 2 应该收到 targetCreated 事件
+    // 客户端 2 等待特定的 targetCreated 事件(匹配刚创建的targetId)
+    const targetCreatedPromise = new Promise<any>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error(`Timeout waiting for Target.targetCreated with targetId ${createResult.targetId}`));
+      }, 5000);
+
+      const handler = (data: WebSocket.Data) => {
+        try {
+          const message = JSON.parse(data.toString());
+          if (message.method === 'Target.targetCreated' && 
+              message.params.targetInfo.targetId === createResult.targetId) {
+            clearTimeout(timer);
+            ws2.off('message', handler);
+            resolve(message);
+          }
+        } catch (e) {
+          // 忽略解析错误
+        }
+      };
+
+      ws2.on('message', handler);
+    });
+
+    // 客户端 2 应该收到正确的 targetCreated 事件
     const targetCreatedEvent = await targetCreatedPromise;
     expect(targetCreatedEvent.params.targetInfo.targetId).toBe(createResult.targetId);
 

@@ -203,7 +203,10 @@ export class CdpGateway {
               { name: 'detachFromTarget', parameters: [{ name: 'sessionId', type: 'string' }] },
               { name: 'sendMessageToTarget', parameters: [{ name: 'message', type: 'string' }, { name: 'sessionId', type: 'string' }] },
               { name: 'getTargets', returns: [{ name: 'targetInfos', type: 'array' }] },
-              { name: 'closeTarget', parameters: [{ name: 'targetId', type: 'string' }] }
+              { name: 'closeTarget', parameters: [{ name: 'targetId', type: 'string' }] },
+              { name: 'getBrowserContexts', returns: [{ name: 'browserContextIds', type: 'array' }] },
+              { name: 'createBrowserContext', returns: [{ name: 'browserContextId', type: 'string' }] },
+              { name: 'disposeBrowserContext', parameters: [{ name: 'browserContextId', type: 'string' }] }
             ],
             events: [
               { name: 'targetCreated', parameters: [{ name: 'targetInfo', type: 'object' }] },
@@ -288,19 +291,41 @@ export class CdpGateway {
     this.server.on('upgrade', (request, socket, head) => {
       const url = new URL(request.url ?? '', `http://${request.headers.host ?? ''}`);
       
+      logger.info('[CDP-WS] Upgrade request received', {
+        url: request.url,
+        pathname: url.pathname,
+        isDevtoolsPath: url.pathname.startsWith('/devtools/')
+      });
+      
       // Only handle /devtools/* paths
       if (url.pathname.startsWith('/devtools/')) {
+        logger.info('[CDP-WS] Handling upgrade for devtools path', { pathname: url.pathname });
         this.wss?.handleUpgrade(request, socket, head, (ws) => {
+          logger.info('[CDP-WS] Upgrade completed, emitting connection', { pathname: url.pathname });
           this.wss?.emit('connection', ws, request);
         });
       } else {
+        logger.warn('[CDP-WS] Rejecting non-devtools path', { pathname: url.pathname });
         socket.destroy();
       }
     });
 
     this.wss.on('connection', async (ws, request) => {
+      // Log ALL WebSocket connections for debugging
+      logger.info('[CDP-WS] WebSocket connection event fired', {
+        url: request.url,
+        headers: request.headers
+      });
+      
       const url = new URL(request.url ?? '', `http://${request.headers.host ?? ''}`);
       const [, , targetType, targetId] = url.pathname.split('/');
+      
+      logger.info('[CDP-WS] Connection URL parsed', {
+        pathname: url.pathname,
+        targetType,
+        targetId,
+        pathnameSplit: url.pathname.split('/')
+      });
 
       // If targetType is 'browser' but no targetId, use first browser as default
       let effectiveBrowserId = targetId;
@@ -318,45 +343,296 @@ export class CdpGateway {
 
       this.clients.add(client);
 
-      logger.info('CDP client connected', { targetType, targetId: effectiveBrowserId || targetId });
+      logger.debug('[CDP-WS] WebSocket client registered', { 
+        targetType, 
+        targetId: effectiveBrowserId || targetId,
+        browserId: client.browserId,
+        pageId: client.pageId
+      });
 
       // For page connections, attach to CDP session
+      logger.debug('[CDP-WS] Checking page connection condition', {
+        targetType,
+        targetId,
+        isPageType: targetType === 'page',
+        hasTargetId: !!targetId,
+        willEnterHandler: targetType === 'page' && !!targetId
+      });
+      
       if (targetType === 'page' && targetId) {
+        logger.debug('[CDP] Page endpoint connection - START', { targetId });
+        
+        // Add WebSocket lifecycle logging
+        logger.info('[CDP-WS] Page endpoint - Initial WebSocket state', {
+          targetId,
+          readyState: ws.readyState,
+          stateNames: {
+            0: 'CONNECTING',
+            1: 'OPEN',
+            2: 'CLOSING',
+            3: 'CLOSED'
+          }[ws.readyState]
+        });
+        
+        ws.on('open', () => {
+          logger.info('[CDP-WS] Page endpoint - WebSocket OPEN event', { targetId });
+        });
+        
+        ws.on('close', (code, reason) => {
+          logger.info('[CDP-WS] Page endpoint - WebSocket CLOSE event', {
+            targetId,
+            code,
+            reason: reason.toString()
+          });
+        });
+        
+        ws.on('error', (error) => {
+          logger.error('[CDP-WS] Page endpoint - WebSocket ERROR event', {
+            targetId,
+            error,
+            message: error.message
+          });
+        });
+        
+        // CRITICAL FIX: Register message handler IMMEDIATELY to avoid race condition
+        // Store messages in a buffer until CDP session is ready
+        const messageBuffer: string[] = [];
+        let sessionReady = false;
+        let clientId: string | null = null;
+        
+        logger.info('[CDP-WS] Page endpoint - Registering message handler immediately', { targetId });
+        
+        ws.on('message', async (message) => {
+          const msgStr = message.toString();
+          logger.info('[CDP] Page endpoint - WebSocket message received (early handler)', {
+            targetType,
+            targetId,
+            clientId,
+            sessionReady,
+            messagePreview: msgStr.substring(0, 200)
+          });
+          
+          if (sessionReady && clientId) {
+            // Session is ready, handle message immediately
+            try {
+              await this.sessionManager.handleClientMessage(targetId, clientId!, msgStr);
+              logger.info('[CDP] Page endpoint - Message handled successfully', {
+                targetId,
+                clientId
+              });
+            } catch (error) {
+              logger.error('[CDP] Page endpoint - Error handling message', {
+                targetId,
+                clientId,
+                error,
+                message: error instanceof Error ? error.message : 'Unknown error'
+              });
+            }
+          } else {
+            // Session not ready yet, buffer the message
+            logger.info('[CDP] Page endpoint - Session not ready, buffering message', {
+              targetId,
+              bufferLength: messageBuffer.length + 1
+            });
+            messageBuffer.push(msgStr);
+          }
+        });
+        
         const page = this.fleetManager.getPage(targetId);
+        
+        if (!page) {
+          logger.error('[CDP] Page endpoint connection - Page NOT FOUND', { targetId });
+          ws.close();
+          return;
+        }
+        
+        logger.debug('[CDP] Page endpoint connection - Page found', { 
+          targetId, 
+          pageId: page.pageId,
+          hasWebContents: !!page.view?.webContents 
+        });
+        
         if (page) {
-          const clientId = `${targetId}-${Date.now()}`;
+          // Wait for WebContents to be ready before attaching debugger
+          const webContents = page.view.webContents;
+          
+          logger.debug('[CDP] Page endpoint - Checking WebContents state', {
+            targetId,
+            isDestroyed: webContents.isDestroyed(),
+            isLoading: webContents.isLoading(),
+            url: webContents.getURL()
+          });
+          
+          // Check if WebContents is in a valid state
+          if (webContents.isDestroyed()) {
+            logger.error('[CDP] Page endpoint - WebContents is already destroyed', { targetId });
+            ws.close();
+            return;
+          }
+
+          // For pages that haven't started loading yet, give them time to start
+          // This is especially important for non-activated pages created via CDP
+          logger.debug('[CDP] Page endpoint - Waiting for WebContents to be ready for debugger', { 
+            targetId, 
+            isLoading: webContents.isLoading(),
+            url: webContents.getURL() 
+          });
+          
+          // Wait longer to ensure WebContents is fully initialized
+          // Non-activated pages may need more time to set up
+          logger.debug('[CDP] Page endpoint - Initial wait (500ms)', { targetId });
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          logger.debug('[CDP] Page endpoint - After initial wait', {
+            targetId,
+            isLoading: webContents.isLoading(),
+            url: webContents.getURL()
+          });
+          
+          // Now wait for any active loading to complete
+          if (webContents.isLoading()) {
+            logger.debug('[CDP] Page endpoint - WebContents is loading, waiting for completion', { targetId });
+            await new Promise<void>((resolve) => {
+              const onReady = () => {
+                webContents.removeListener('did-finish-load', onReady);
+                webContents.removeListener('did-fail-load', onReady);
+                resolve();
+              };
+              webContents.once('did-finish-load', onReady);
+              webContents.once('did-fail-load', onReady);
+              
+              // Timeout after 3 seconds
+              setTimeout(() => {
+                webContents.removeListener('did-finish-load', onReady);
+                webContents.removeListener('did-fail-load', onReady);
+                resolve();
+              }, 3000);
+            });
+          }
+          
+          // Final delay to ensure everything is settled
+          logger.debug('[CDP] Page endpoint - Final wait (200ms)', { targetId });
+          await new Promise(resolve => setTimeout(resolve, 200));
+
+          logger.debug('[CDP] Page endpoint - Ready to attach CDP session', { targetId });
+          clientId = `${targetId}-${Date.now()}`;
+          
+          logger.info('[CDP-WS] Page endpoint - About to attach client', {
+            targetId,
+            clientId,
+            wsReadyStateBefore: ws.readyState,
+            wsReadyStateNameBefore: {
+              0: 'CONNECTING',
+              1: 'OPEN',
+              2: 'CLOSING',
+              3: 'CLOSED'
+            }[ws.readyState]
+          });
+          
           await this.sessionManager.attachClient(
             targetId,
-            page.view.webContents,
-            clientId,
+            webContents,
+            clientId!,
             {
               send: (message: string) => {
+                const currentState = ws.readyState;
+                const stateName = {
+                  0: 'CONNECTING',
+                  1: 'OPEN',
+                  2: 'CLOSING',
+                  3: 'CLOSED'
+                }[currentState];
+                
+                logger.info('[CDP-WS] Page endpoint - send callback invoked', {
+                  targetId,
+                  clientId,
+                  wsReadyState: currentState,
+                  wsReadyStateName: stateName,
+                  wsOpen: currentState === WebSocket.OPEN,
+                  messagePreview: message.substring(0, 200)
+                });
+                
                 if (ws.readyState === WebSocket.OPEN) {
+                  logger.info('[CDP-WS] Page endpoint - Sending message to WebSocket', {
+                    targetId,
+                    clientId,
+                    messageLength: message.length
+                  });
                   ws.send(message);
+                  logger.info('[CDP-WS] Page endpoint - Message sent successfully', {
+                    targetId,
+                    clientId
+                  });
+                } else {
+                  logger.warn('[CDP-WS] Page endpoint - WebSocket NOT OPEN, message dropped', {
+                    targetId,
+                    clientId,
+                    wsReadyState: currentState,
+                    wsReadyStateName: stateName,
+                    messagePreview: message.substring(0, 200)
+                  });
                 }
               },
               close: () => {
+                logger.info('[CDP-WS] Page endpoint - close callback invoked', {
+                  targetId,
+                  clientId,
+                  wsReadyState: ws.readyState
+                });
                 ws.close();
               }
             }
           );
-
-          ws.on('message', (message) => {
-            logger.debug('CDP message received', {
-              targetType,
-              targetId,
-              message: message.toString()
-            });
-            this.sessionManager.handleClientMessage(targetId, clientId, message.toString());
+          
+          logger.info('[CDP-WS] Page endpoint - Client attached successfully', {
+            targetId,
+            clientId,
+            wsReadyStateAfter: ws.readyState,
+            wsReadyStateNameAfter: {
+              0: 'CONNECTING',
+              1: 'OPEN',
+              2: 'CLOSING',
+              3: 'CLOSED'
+            }[ws.readyState]
           });
 
+          logger.debug('[CDP] Page endpoint - CDP session attached successfully', { targetId, clientId });
+
+          // Mark session as ready and process buffered messages
+          sessionReady = true;
+          logger.info('[CDP] Page endpoint - Session ready, processing buffered messages', {
+            targetId,
+            clientId,
+            bufferedCount: messageBuffer.length
+          });
+          
+          // Process any buffered messages
+          for (const bufferedMsg of messageBuffer) {
+            logger.info('[CDP] Page endpoint - Processing buffered message', {
+              targetId,
+              clientId,
+              messagePreview: bufferedMsg.substring(0, 200)
+            });
+            try {
+              await this.sessionManager.handleClientMessage(targetId, clientId!, bufferedMsg);
+            } catch (error) {
+              logger.error('[CDP] Page endpoint - Error processing buffered message', {
+                targetId,
+                clientId,
+                error
+              });
+            }
+          }
+          messageBuffer.length = 0; // Clear buffer
+
           ws.on('close', () => {
-            logger.info('CDP client disconnected', { targetType, targetId });
-            this.sessionManager.detachClient(targetId, clientId);
+            logger.debug('[CDP] Page endpoint - Client disconnected', { targetType, targetId });
+            sessionReady = false;
+            this.sessionManager.detachClient(targetId, clientId!);
             this.clients.delete(client);
           });
         } else {
-          logger.warn('Page not found for CDP connection', { pageId: targetId });
+          logger.warn('[CDP] Page endpoint - Page not found for CDP connection', { pageId: targetId });
           ws.close();
           return;
         }
@@ -375,7 +651,7 @@ export class CdpGateway {
         });
 
         ws.on('close', () => {
-          logger.info('CDP client disconnected', { targetType, targetId });
+          logger.debug('CDP client disconnected', { targetType, targetId });
           this.clients.delete(client);
         });
       } else {
@@ -436,6 +712,15 @@ export class CdpGateway {
           break;
         case 'Browser.setDownloadBehavior':
           this.handleBrowserSetDownloadBehavior(client, browserId, msg);
+          break;
+        case 'Target.getBrowserContexts':
+          this.handleGetBrowserContexts(client, browserId, msg);
+          break;
+        case 'Target.createBrowserContext':
+          this.handleCreateBrowserContext(client, browserId, msg);
+          break;
+        case 'Target.disposeBrowserContext':
+          this.handleDisposeBrowserContext(client, browserId, msg);
           break;
         case 'Target.setDiscoverTargets':
           this.handleSetDiscoverTargets(client, browserId, msg);
@@ -503,7 +788,7 @@ export class CdpGateway {
   }
 
   private handleBrowserGetVersion(client: WebSocketClient, browserId: string, msg: CdpMessage) {
-    logger.info('Browser.getVersion requested', { browserId });
+    logger.debug('Browser.getVersion requested', { browserId });
 
     const state = this.fleetManager.getState();
     const versionInfo = this.buildVersionPayload(state);
@@ -529,7 +814,7 @@ export class CdpGateway {
     const downloadPath = msg.params?.downloadPath as string;
     const eventsEnabled = msg.params?.eventsEnabled as boolean;
 
-    logger.info('Browser.setDownloadBehavior', {
+    logger.debug('Browser.setDownloadBehavior', {
       browserId,
       behavior,
       downloadPath,
@@ -544,10 +829,61 @@ export class CdpGateway {
     });
   }
 
+  private handleGetBrowserContexts(
+    client: WebSocketClient,
+    browserId: string,
+    msg: CdpMessage
+  ) {
+    logger.debug('Target.getBrowserContexts', { browserId });
+
+    // In our implementation, each browser is a single context
+    // We return the default context (empty array means default context)
+    this.sendResponse(client.ws, {
+      id: msg.id,
+      result: {
+        browserContextIds: []
+      }
+    });
+  }
+
+  private handleCreateBrowserContext(
+    client: WebSocketClient,
+    browserId: string,
+    msg: CdpMessage
+  ) {
+    logger.debug('Target.createBrowserContext', { browserId });
+
+    // For now, we don't support creating multiple browser contexts
+    // Return the default browser context (using browserId as contextId)
+    this.sendResponse(client.ws, {
+      id: msg.id,
+      result: {
+        browserContextId: browserId
+      }
+    });
+  }
+
+  private handleDisposeBrowserContext(
+    client: WebSocketClient,
+    browserId: string,
+    msg: CdpMessage
+  ) {
+    const browserContextId = msg.params?.browserContextId as string;
+
+    logger.debug('Target.disposeBrowserContext', { browserId, browserContextId });
+
+    // For now, we don't actually dispose contexts
+    // Just acknowledge the command
+    this.sendResponse(client.ws, {
+      id: msg.id,
+      result: {}
+    });
+  }
+
   private handleGetTargetInfo(client: WebSocketClient, browserId: string, msg: CdpMessage) {
     const targetId = msg.params?.targetId as string;
 
-    logger.info('Target.getTargetInfo', { browserId, targetId });
+    logger.debug('Target.getTargetInfo', { browserId, targetId });
 
     // If no targetId specified, return info about the browser itself
     if (!targetId) {
@@ -613,7 +949,7 @@ export class CdpGateway {
       return;
     }
 
-    logger.info('Closing target', { browserId, targetId });
+    logger.debug('Closing target', { browserId, targetId });
 
     const page = this.fleetManager.getPage(targetId);
     if (!page) {
@@ -659,7 +995,7 @@ export class CdpGateway {
     const discover = msg.params?.discover as boolean;
     client.discoverTargets = discover;
 
-    logger.info('Target discovery toggled', { browserId, discover });
+    logger.debug('Target discovery toggled', { browserId, discover });
 
     this.sendResponse(client.ws, {
       id: msg.id,
@@ -694,7 +1030,14 @@ export class CdpGateway {
   private async handleCreateTarget(client: WebSocketClient, browserId: string, msg: CdpMessage) {
     const url = (msg.params?.url as string) ?? 'about:blank';
 
-    logger.info('Creating new target', { browserId, url });
+    logger.info('[CDP] handleCreateTarget - START', { 
+      browserId, 
+      url, 
+      msgId: msg.id,
+      autoAttachEnabled: client.autoAttach?.enabled,
+      autoAttachFlatten: client.autoAttach?.flatten,
+      autoAttachWaitForDebugger: client.autoAttach?.waitForDebuggerOnStart
+    });
 
     const page = this.fleetManager.createPage({
       browserId,
@@ -703,6 +1046,7 @@ export class CdpGateway {
     });
 
     if (!page) {
+      logger.error('[CDP] handleCreateTarget - FAILED to create page', { browserId, url });
       this.sendResponse(client.ws, {
         id: msg.id,
         error: {
@@ -712,6 +1056,12 @@ export class CdpGateway {
       });
       return;
     }
+
+    logger.debug('[CDP] handleCreateTarget - Page created successfully', { 
+      browserId, 
+      pageId: page.pageId,
+      url 
+    });
 
     // Store the created page ID to ensure consistent targetId in events
     const createdPageId = page.pageId;
@@ -723,66 +1073,101 @@ export class CdpGateway {
       }
     });
 
-    // Notify discovery if enabled - use the same pageId we just returned
-    if (client.discoverTargets) {
-      const browser = this.fleetManager.getBrowser(browserId);
-      const pageModel = browser?.store.getPage(createdPageId);
-      
-      logger.debug('Broadcasting Target.targetCreated', { 
-        browserId, 
-        targetId: createdPageId,
-        url: pageModel?.url ?? url
-      });
-
-      this.sendEvent(client.ws, {
-        method: 'Target.targetCreated',
-        params: {
-          targetInfo: {
-            targetId: createdPageId,
-            type: 'page',
-            title: pageModel?.title ?? 'New Tab',
-            url: pageModel?.url ?? url,
-            attached: false,
-            canAccessOpener: false,
-            browserContextId: browserId
-          }
-        }
-      });
-    }
+    // Note: Target.targetCreated event will be broadcast by BrowserFleetManager.createPage()
+    // via broadcastTargetCreated() to all clients with discovery enabled.
+    // This ensures consistent behavior and avoids duplicate events.
 
     // Auto-attach if enabled for this client
     if (client.autoAttach?.enabled) {
-      logger.info('Auto-attaching to newly created target', { browserId, targetId: createdPageId });
+      logger.debug('[CDP] handleCreateTarget - Auto-attach enabled, attaching...', { 
+        browserId, 
+        targetId: createdPageId,
+        flatten: client.autoAttach.flatten 
+      });
       
       const sessionId = `${createdPageId}-session-${Date.now()}`;
       client.attachedTargets?.add(createdPageId);
 
       if (client.autoAttach.flatten) {
-        // In flattened mode, attach the CDP session directly
-        await this.sessionManager.attachClient(
-          createdPageId,
-          page.view.webContents,
+        // CRITICAL FIX: Attach CDP session FIRST, then send attachedToTarget event
+        // This ensures the session is fully ready before Playwright tries to use it
+        const webContents = page.view.webContents;
+        
+        logger.debug('[CDP] handleCreateTarget - Waiting for WebContents to be ready', { 
+          targetId: createdPageId, 
           sessionId,
-          {
-            send: (message: string) => {
-              // Wrap in Target.receivedMessageFromTarget
-              this.sendEvent(client.ws, {
-                method: 'Target.receivedMessageFromTarget',
-                params: {
-                  sessionId,
-                  message,
-                  targetId: createdPageId
-                }
-              });
-            },
-            close: () => {
-              logger.info('CDP session closed', { sessionId, targetId: createdPageId });
+          isLoading: webContents.isLoading()
+        });
+        
+        // Wait for WebContents to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        if (webContents.isLoading()) {
+          logger.debug('[CDP] handleCreateTarget - WebContents is loading, waiting...', { 
+            targetId: createdPageId 
+          });
+          await new Promise<void>((resolve) => {
+            const onReady = () => {
+              webContents.removeListener('did-finish-load', onReady);
+              webContents.removeListener('did-fail-load', onReady);
+              resolve();
+            };
+            webContents.once('did-finish-load', onReady);
+            webContents.once('did-fail-load', onReady);
+            
+            // Timeout after 2 seconds
+            setTimeout(() => {
+              webContents.removeListener('did-finish-load', onReady);
+              webContents.removeListener('did-fail-load', onReady);
+              resolve();
+            }, 2000);
+          });
+        }
+        
+        logger.debug('[CDP] handleCreateTarget - Attaching CDP session (AWAIT)', { 
+          targetId: createdPageId, 
+          sessionId 
+        });
+        
+        // AWAIT the CDP session attachment to complete
+        try {
+          await this.sessionManager.attachClient(
+            createdPageId,
+            webContents,
+            sessionId,
+            {
+              send: (message: string) => {
+                // Wrap in Target.receivedMessageFromTarget
+                this.sendEvent(client.ws, {
+                  method: 'Target.receivedMessageFromTarget',
+                  params: {
+                    sessionId,
+                    message,
+                    targetId: createdPageId
+                  }
+                });
+              },
+              close: () => {
+                logger.info('[CDP] CDP session closed', { sessionId, targetId: createdPageId });
+              }
             }
-          }
-        );
+          );
+          
+          logger.debug('[CDP] handleCreateTarget - CDP session attached successfully', { 
+            targetId: createdPageId, 
+            sessionId 
+          });
+        } catch (error) {
+          logger.error('[CDP] handleCreateTarget - Failed to attach CDP session', {
+            targetId: createdPageId,
+            sessionId,
+            error
+          });
+          return; // Don't send attachedToTarget if attachment failed
+        }
       }
 
-      // Send attachedToTarget event
+      // Send attachedToTarget event AFTER CDP session is ready
       const browser = this.fleetManager.getBrowser(browserId);
       const pageModel = browser?.store.getPage(createdPageId);
       this.sendEvent(client.ws, {
@@ -800,6 +1185,11 @@ export class CdpGateway {
           },
           waitingForDebugger: client.autoAttach.waitForDebuggerOnStart
         }
+      });
+      
+      logger.debug('[CDP] handleCreateTarget - Sent Target.attachedToTarget event', {
+        targetId: createdPageId,
+        sessionId
       });
     }
   }
@@ -823,7 +1213,12 @@ export class CdpGateway {
       return;
     }
 
-    logger.info('Attaching to target', { browserId, targetId, flatten });
+    logger.debug('[CDP] handleAttachToTarget - START', { 
+      browserId, 
+      targetId, 
+      flatten,
+      msgId: msg.id 
+    });
 
     const page = this.fleetManager.getPage(targetId);
     if (!page) {
@@ -841,26 +1236,7 @@ export class CdpGateway {
     const sessionId = `${targetId}-session-${Date.now()}`;
     client.attachedTargets?.add(targetId);
 
-    if (flatten) {
-      // In flattened mode, attach the CDP session directly
-      await this.sessionManager.attachClient(targetId, page.view.webContents, sessionId, {
-        send: (message: string) => {
-          // Wrap in Target.receivedMessageFromTarget
-          this.sendEvent(client.ws, {
-            method: 'Target.receivedMessageFromTarget',
-            params: {
-              sessionId,
-              message,
-              targetId
-            }
-          });
-        },
-        close: () => {
-          logger.info('CDP session closed', { sessionId, targetId });
-        }
-      });
-    }
-
+    // Send response immediately
     this.sendResponse(client.ws, {
       id: msg.id,
       result: {
@@ -868,27 +1244,103 @@ export class CdpGateway {
       }
     });
 
-    // Notify about attachment
-    if (client.discoverTargets) {
-      const browser = this.fleetManager.getBrowser(browserId);
-      const pageModel = browser?.store.getPage(page.pageId);
-      this.sendEvent(client.ws, {
-        method: 'Target.attachedToTarget',
-        params: {
-          sessionId,
-          targetInfo: {
-            targetId: page.pageId,
-            type: 'page',
-            title: pageModel?.title ?? 'New Tab',
-            url: pageModel?.url ?? 'about:blank',
-            attached: true,
-            canAccessOpener: false,
-            browserContextId: browserId
-          },
-          waitingForDebugger: false
-        }
+    if (flatten) {
+      // CRITICAL FIX: Attach CDP session FIRST, then send attachedToTarget event
+      const webContents = page.view.webContents;
+      
+      logger.debug('[CDP] handleAttachToTarget - Waiting for WebContents to be ready', { 
+        targetId, 
+        sessionId,
+        isLoading: webContents.isLoading()
       });
+      
+      // Wait for WebContents to be ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      if (webContents.isLoading()) {
+        logger.debug('[CDP] handleAttachToTarget - WebContents is loading, waiting...', { 
+          targetId 
+        });
+        await new Promise<void>((resolve) => {
+          const onReady = () => {
+            webContents.removeListener('did-finish-load', onReady);
+            webContents.removeListener('did-fail-load', onReady);
+            resolve();
+          };
+          webContents.once('did-finish-load', onReady);
+          webContents.once('did-fail-load', onReady);
+          
+          // Timeout after 2 seconds
+          setTimeout(() => {
+            webContents.removeListener('did-finish-load', onReady);
+            webContents.removeListener('did-fail-load', onReady);
+            resolve();
+          }, 2000);
+        });
+      }
+      
+      logger.debug('[CDP] handleAttachToTarget - Attaching CDP session (AWAIT)', { 
+        targetId, 
+        sessionId 
+      });
+      
+      // AWAIT the CDP session attachment to complete
+      try {
+        await this.sessionManager.attachClient(targetId, webContents, sessionId, {
+          send: (message: string) => {
+            // Wrap in Target.receivedMessageFromTarget
+            this.sendEvent(client.ws, {
+              method: 'Target.receivedMessageFromTarget',
+              params: {
+                sessionId,
+                message,
+                targetId
+              }
+            });
+          },
+          close: () => {
+            logger.info('[CDP] CDP session closed', { sessionId, targetId });
+          }
+        });
+        
+        logger.debug('[CDP] handleAttachToTarget - CDP session attached successfully', { 
+          targetId, 
+          sessionId 
+        });
+      } catch (error) {
+        logger.error('[CDP] handleAttachToTarget - Failed to attach CDP session', {
+          targetId,
+          sessionId,
+          error
+        });
+        return; // Don't send attachedToTarget if attachment failed
+      }
     }
+
+    // Send attachedToTarget event AFTER CDP session is ready
+    const browser = this.fleetManager.getBrowser(browserId);
+    const pageModel = browser?.store.getPage(page.pageId);
+    this.sendEvent(client.ws, {
+      method: 'Target.attachedToTarget',
+      params: {
+        sessionId,
+        targetInfo: {
+          targetId: page.pageId,
+          type: 'page',
+          title: pageModel?.title ?? 'New Tab',
+          url: pageModel?.url ?? 'about:blank',
+          attached: true,
+          canAccessOpener: false,
+          browserContextId: browserId
+        },
+        waitingForDebugger: false
+      }
+    });
+    
+    logger.debug('[CDP] handleAttachToTarget - Sent Target.attachedToTarget event', {
+      targetId,
+      sessionId
+    });
   }
 
   private handleSendMessageToTarget(
@@ -948,7 +1400,7 @@ export class CdpGateway {
     }
 
     const targetId = sessionId.split('-session-')[0];
-    logger.info('Detaching from target', { browserId, targetId, sessionId });
+    logger.debug('Detaching from target', { browserId, targetId, sessionId });
 
     this.sessionManager.detachClient(targetId, sessionId);
     client.attachedTargets?.delete(targetId);
@@ -1005,7 +1457,7 @@ export class CdpGateway {
     const waitForDebuggerOnStart = (msg.params?.waitForDebuggerOnStart as boolean) ?? false;
     const flatten = (msg.params?.flatten as boolean) ?? true;
 
-    logger.info('Target.setAutoAttach', { 
+    logger.debug('Target.setAutoAttach', { 
       browserId, 
       autoAttach, 
       waitForDebuggerOnStart, 
@@ -1039,9 +1491,31 @@ export class CdpGateway {
 
           if (flatten) {
             // In flattened mode, attach the CDP session directly
+            // Ensure WebContents is ready before attaching
+            const webContents = page.view.webContents;
+            if (webContents.isLoading()) {
+              await new Promise<void>((resolve) => {
+                const onReady = () => {
+                  webContents.removeListener('did-finish-load', onReady);
+                  webContents.removeListener('did-fail-load', onReady);
+                  resolve();
+                };
+                webContents.once('did-finish-load', onReady);
+                webContents.once('did-fail-load', onReady);
+                setTimeout(() => {
+                  webContents.removeListener('did-finish-load', onReady);
+                  webContents.removeListener('did-fail-load', onReady);
+                  resolve();
+                }, 2000);
+              });
+            }
+            
+            // Add a small delay to ensure WebContents is fully ready for debugger
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
             await this.sessionManager.attachClient(
               page.pageId,
-              page.view.webContents,
+              webContents,
               sessionId,
               {
                 send: (message: string) => {
@@ -1120,7 +1594,7 @@ export class CdpGateway {
       title: string;
     }
   ) {
-    logger.info('Broadcasting Target.targetCreated', { browserId, pageInfo });
+    logger.debug('Broadcasting Target.targetCreated', { browserId, pageInfo });
 
     for (const client of this.clients) {
       // Only send to clients connected to this browser with discovery enabled
@@ -1148,7 +1622,7 @@ export class CdpGateway {
    * Called when UI closes a page
    */
   broadcastTargetDestroyed(browserId: string, pageId: string) {
-    logger.info('Broadcasting Target.targetDestroyed', { browserId, pageId });
+    logger.debug('Broadcasting Target.targetDestroyed', { browserId, pageId });
 
     for (const client of this.clients) {
       // Only send to clients connected to this browser with discovery enabled
